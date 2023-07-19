@@ -1,0 +1,9 @@
+#Data sets#
+###########
+*.parquet
+data/
+
+#Config files#
+##############
+
+
