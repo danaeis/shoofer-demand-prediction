@@ -1,0 +1,354 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.7
+  kernelspec:
+    display_name: Python 3
+    name: python3
+---
+
+<!-- #region id="8UTIGpTZZlOO" -->
+# Setup
+<!-- #endregion -->
+
+```{python}
+# %pip install xgboost
+```
+
+```{python id="AnwSHO1L97I5"}
+import requests
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import datetime
+from itertools import product
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import GridSearchCV
+import xgboost as xgb
+import os
+```
+
+<!-- #region id="rGhdilSeZosS" -->
+## Defining functions
+<!-- #endregion -->
+
+```{python id="BcGvcilUWEEC"}
+def evaluate(metric, metric_name, true_values, predicted_values):
+    print(f'{metric_name} : {metric(true_values, predicted_values)}')
+```
+
+```{python}
+def train_test_split(data, train_size, test_size, path):
+    train_data = []
+    test_data = []
+    #train part
+    for i in range(train_size):
+        name = path + 'm' + str(i + 1) + '.parquet'
+        data = pd.read_parquet(name)
+        train_data.append(data)
+    #test part
+    for j in range(test_size):
+        name = path + 'm' + str(j + train_size + 1) + '.parquet'
+        data = pd.read_parquet(name)
+        test_data.append(data)
+    return train_data, test_data
+```
+
+```{python id="IxUxlOhM-RxN"}
+def load_data(path, force_update):
+    urls = ['https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-01.parquet',
+                'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-02.parquet',
+                'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-03.parquet',
+                'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-04.parquet']
+    if os.path.exists(path) and (not force_update):
+        pass
+    else:
+        if not os.path.exists(path): 
+            os.mkdir(path)
+        for index in range(len(urls)):
+            response = requests.get(urls[index])
+            name = path + 'm' + str(index + 1) + '.parquet'
+
+            with open(name, 'wb') as f:
+                f.write(response.content)
+    datas = []
+    for i in range(len(urls)):
+        name = path + 'm' + str(i + 1) + '.parquet'
+        data = pd.read_parquet(name)
+        data.append(data)
+
+    return datas
+    
+```
+
+```{python id="GwJhjM_BGPJm"}
+def date_format_modifier(data):  # Year/Month/Day
+    data['month'] = pd.DataFrame([int(date.strftime("%m")) for date in data['PU_date']])
+    data['day_month'] = pd.DataFrame([int(date.strftime("%d")) for date in data['PU_date']])
+    data['day_week'] = pd.DataFrame([int(date.weekday()) for date in data['PU_date']])
+    data = data.dropna()
+    data = data.reindex(columns = ['PU_date', 'PULocationID', 'month','day_month', 'day_week', 'Demand'])
+    return data
+```
+
+```{python id="ifvk6uWS6hnT"}
+def add_features(data):  # run after merging datasets and modifing date
+    # Lag features
+    data['prev_day_demand'] = data.groupby(['PULocationID'])['Demand'].shift(1)
+
+    data = data.dropna()
+
+    return data
+```
+
+```{python id="_442tahy-fOo"}
+def grouping_by(data, group_list):
+    data_grouped = data.groupby(group_list, as_index = False)['extra'].count()
+    data_grouped = data_grouped.rename(columns={'extra' : 'Demand'})
+
+    return data_grouped
+```
+
+```{python id="soC36oneCC8x"}
+def clearing_data_noise(datas, months):
+    clean_datas = []
+    for index in range(len(datas)):
+        month = months[index]
+        data = datas[index]
+
+        clean_data = data[[int(date.strftime("%m")) == month for date in data['tpep_pickup_datetime']]]
+        clean_data = clean_data.dropna()
+        clean_datas.append(clean_data)
+    return clean_datas
+```
+
+```{python id="sOMPo5ryBm8g"}
+def grid_search(model, test_parameters, train_data, cv = None):
+    gs = GridSearchCV(estimator = model, param_grid = test_parameters, scoring = 'neg_root_mean_squared_error', cv = cv, n_jobs = -1)
+    gs.fit(train_data[train_list], train_data['Demand'])
+    return gs.best_params_, gs.best_score_
+```
+
+```{python id="pbhM5Oe6PjW7"}
+def point_predict(model, train_data, test_data):
+
+    model.fit(train_data[train_list], train_data['Demand'])
+
+
+    yhat_train = model.predict(train_data[train_list])
+    yhat_test = model.predict(test_data[train_list])
+
+    return yhat_train, yhat_test
+```
+
+```{python id="ao6nw8xsRvB9"}
+def point_predict_visualizer(train_data, test_data, yhat_train, yhat_test):
+
+    predicted_train_df = train_data.copy(deep = True)
+    predicted_test_df = test_data.copy(deep = True)
+    predicted_train_df['Predicted'] = yhat_train
+    predicted_test_df['Predicted'] = yhat_test
+
+    train_data = train_data.groupby('day_year')['Demand'].sum()
+    test_data = test_data.groupby('day_year')['Demand'].sum()
+    predicted_train_df = predicted_train_df.groupby('day_year')['Predicted'].sum()
+    predicted_test_df = predicted_test_df.groupby('day_year')['Predicted'].sum()
+
+    plt.title('Train')
+    plt.plot(train_data)
+    plt.plot(predicted_train_df)
+    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.show()
+
+    plot_length = len(test_data)
+    plt.title('Test')
+    plt.plot(test_data)
+    plt.plot(predicted_test_df)
+    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.show()
+```
+
+```{python id="iSHp4-guLY6F"}
+def concating_data(datas):
+    data_combined = pd.concat(datas, axis=0)
+    return data_combined
+```
+
+```{python id="v4-GWghuSbnA"}
+def evaluation(model_name, train_data, test_data, yhat_train, yhat_test):
+    print(f'{model_name} train scores:')
+
+
+    evaluate(mean_absolute_error, 'MAE', train_data['Demand'], yhat_train)
+    evaluate(mean_squared_error, 'MSE', train_data['Demand'], yhat_train)
+
+    print(f'{model_name} test scores:')
+
+
+    evaluate(mean_absolute_error, 'MAE', test_data['Demand'], yhat_test)
+    evaluate(mean_squared_error, 'MSE', test_data['Demand'], yhat_test)
+
+```
+
+```{python}
+def day_of_year_modifier(data, year):
+    data['day_year'] = 0
+
+    # Loop over each row in the DataFrame
+    for index, row in data.iterrows():
+        # Get the day and month values from the current row
+        day = int(row['day_month'])
+        month = int(row['month'])
+        
+        # Calculate the day number for the current row using datetime
+        date = datetime.datetime(year=year, month=month, day=day)
+        day_number = (date - datetime.datetime(year=year, month=1, day=1)).days + 1
+        
+        # Store the day number in the 'day_number' column for the current row
+        data.at[index, 'day_year'] = day_number
+    return data
+```
+
+```{python}
+def fill_missing_demands(data):
+    data = data.reset_index(drop = True)
+    
+    start_date = data['PU_date'].min()
+    end_date = data['PU_date'].max()
+
+    all_loc_dfs = []
+    for location_id in range(1, loc_id_num):
+        filled_with_zero = pd.DataFrame({'PU_date': pd.date_range(start=start_date, end=end_date), 'PULocationID': location_id})
+            
+        filled_with_zero['Demand'] = 0
+        for i in range(len(filled_with_zero)):
+            loc_date_row = data[(data['PU_date']==filled_with_zero['PU_date'][i]) 
+                                &(data['PULocationID']==filled_with_zero['PULocationID'][i])]
+            if not loc_date_row.empty:
+                filled_with_zero['Demand'][i] = loc_date_row['Demand']
+                
+        all_loc_dfs.append(filled_with_zero)
+    filled_data = pd.concat(all_loc_dfs).reset_index(drop=True)
+    return filled_data
+```
+
+```{python}
+def keep_date_day(data):
+    data['PU_date'] = pd.to_datetime(data.tpep_pickup_datetime.dt.date)
+    return data
+```
+
+<!-- #region id="np94_LhiZz_J" -->
+# initialization and loading dataset
+<!-- #endregion -->
+
+## Constant values
+
+```{python id="sTfWPu5oIA5C"}
+group_list = ['PU_date', 'PULocationID']
+train_list = ['month', 'day_month', 'day_week', 'prev_day_demand']
+path = 'datasets/'
+loc_id_num = 266
+year = 2023
+train_size = 3
+test_size = 1
+```
+
+## Load dataset
+
+```{python id="87BFHUu1-z73"}
+data = load_data(path, force_update = False)
+```
+
+## Train Test Split
+
+```{python}
+train_data, test_data = train_test_split(data, train_size, test_size, path)
+```
+
+<!-- #region id="X2ES_CY6-fb5" -->
+# Preprocessing
+<!-- #endregion -->
+
+```{python id="VVRLakW_LeGp"}
+train_data = clearing_data_noise(train_data, [1,2,3])
+test_data = clearing_data_noise(test_data, [4])
+```
+
+```{python}
+train_data_concated = concating_data(train_data)
+test_data_concated = concating_data(test_data)
+```
+
+```{python}
+train_data_days = keep_date_day(train_data_concated)
+test_data_days = keep_date_day(test_data_concated)
+```
+
+```{python}
+train_grouped = grouping_by(train_data_days, group_list)
+test_grouped = grouping_by(test_data_days, group_list)
+```
+
+```{python}
+train_filled = fill_missing_demands(train_grouped)
+test_filled = fill_missing_demands(test_grouped)
+```
+
+```{python id="kRwpaTqkIALM"}
+train_date_modified = date_format_modifier(train_filled)
+test_date_modified = date_format_modifier(test_filled)
+```
+
+```{python id="6AXkWM2I-AEi"}
+train_feature_modified = add_features(train_date_modified)
+test_feature_modified = add_features(test_date_modified)
+```
+
+```{python}
+modified_train = day_of_year_modifier(train_feature_modified, year)
+modified_test = day_of_year_modifier(test_feature_modified, year)
+```
+
+# Model Training
+
+<!-- #region id="PxYfxyCHz_Z3" -->
+## **Ridge Regression**
+<!-- #endregion -->
+
+<!-- #region id="CJn4YIBtKcL_" -->
+### Grid search to find best hyper parameters
+<!-- #endregion -->
+
+```{python colab={'base_uri': 'https://localhost:8080/'}, id="KlE1fodhQZ-x", outputId="78b6789c-03f9-4639-e94c-57bfac1c04dd"}
+model = Ridge()
+best_params, best_score = grid_search(model, {'alpha':[1, 10, 100, 1000, 1000]}, modified_train, cv = 5)
+print(best_params, best_score)
+```
+
+```{python id="MulwYZc7LK7v"}
+model = Ridge(**best_params)
+yhat_train, yhat_test = point_predict(model, modified_train, modified_test)
+```
+
+<!-- #region id="jJYHtg2oRqvS" -->
+### Visualization
+<!-- #endregion -->
+
+```{python colab={'base_uri': 'https://localhost:8080/', 'height': 887}, id="gOyNantNRtda", outputId="dc7796cf-c196-421d-bd56-1d312334dee4"}
+point_predict_visualizer(modified_train, modified_test, yhat_train, yhat_test)
+```
+
+<!-- #region id="RBsqB5hnSuPP" -->
+### Evaluation
+<!-- #endregion -->
+
+```{python colab={'base_uri': 'https://localhost:8080/'}, id="vUBqNgIwSwKe", outputId="c05d64b8-b525-458d-96db-757e94a57d89"}
+evaluation('Ridge Regression', modified_train, modified_test, yhat_train, yhat_test)
+```
