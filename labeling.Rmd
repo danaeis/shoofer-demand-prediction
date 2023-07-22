@@ -19,148 +19,75 @@ import numpy as np
 import pandas as pd
 
 import datetime
-import os
-import requests
+```
+
+# Config
+
+```{python}
+# Add your input and output path
+INPUT_PATH = 'ride_data/'
+OUTPUT_PATH = 'data/labels.parquet'
 ```
 
 # Loading Dataset
 
 ```{python}
-def load_data(path, urls, file_name, force_update=False):
-    if os.path.exists(path) and (not force_update):
-        pass
-    else:
-        if not os.path.exists(path):
-            os.mkdir(path)
-        for index in range(len(urls)):
-            response = requests.get(urls[index])
-            name = path + file_name + str(index + 1) + '.parquet'
-
-            with open(name, 'wb') as f:
-                f.write(response.content)
-    dataset = []
-    for i in range(len(urls)):
-        name = path + file_name + str(i + 1) + '.parquet'
-        data = pd.read_parquet(name)
-        dataset.append(data)
-
-    return dataset
+def load_data(path):
+    df = pd.read_parquet(path) 
+    return df
 ```
 
 ```{python}
-urls = ['https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-01.parquet',
-        'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-02.parquet',
-        'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-03.parquet',
-        'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-04.parquet']
-
-data = load_data('datasets/', urls, file_name='yellow_tripdata_2023-0')
-
-data_1_raw = pd.DataFrame(data[0])
-data_2_raw = pd.DataFrame(data[1])
-data_3_raw = pd.DataFrame(data[2])
-data_4_raw = pd.DataFrame(data[3])
-```
-
-# Cleaning dataset
-
-```{python}
-def clean_data_based_on_date(dataset, start_date: str, end_date: str):
-    # create date from str
+def pre_processing(dataset, start_date: str, end_date: str):
+    # Clean data based on the date
     start_date = datetime.date.fromisoformat(start_date)
     end_date = datetime.date.fromisoformat(end_date)
     clean_dataset = dataset[(dataset['tpep_pickup_datetime'].dt.date >= start_date) &
                             (dataset['tpep_pickup_datetime'].dt.date <= end_date)]
-
+    # Add a new column for pick-up date
+    clean_dataset['PU_date'] = pd.to_datetime(clean_dataset['tpep_pickup_datetime'].dt.date)
     return clean_dataset
 ```
 
 ```{python}
-data_1 = clean_data_based_on_date(data_1_raw, '2023-01-01', '2023-01-31')   # January
-data_2 = clean_data_based_on_date(data_2_raw, '2023-02-01', '2023-02-28')   # February
-data_3 = clean_data_based_on_date(data_3_raw, '2023-03-01', '2023-03-31')   # March
-data_4 = clean_data_based_on_date(data_4_raw, '2023-04-01', '2023-04-30')   # April
-```
+rides_df = pre_processing(load_data(INPUT_PATH), '2023-01-01', '2023-04-30')  # January --> April
 
-```{python}
-print(f"data_1 shape : {data_1.shape}")
-print(f"data_2 shape : {data_2.shape}")
-print(f"data_3 shape : {data_3.shape}")
-print(f"data_4 shape : {data_4.shape}")
+print(f'rides_df shape : {rides_df.shape}')
+rides_df.head()
 ```
 
 # Labeling
 
 ```{python}
-def add_date_from_datetime(dataset, date_col_name: str, datetime_col_name: str):
-    dataset[date_col_name] = pd.to_datetime(dataset[datetime_col_name].dt.date)
-    return dataset
-```
-
-```{python}
-def count_demand_for_each_loc_and_date(dataset):
-    return dataset.groupby(['PULocationID', 'PU_date'])['PU_date'].count().to_frame('Demand')\
-        .sort_values(['PULocationID', 'PU_date'], ascending=[True, True]).reset_index()
-```
-
-```{python}
-def complete_dataset_for_each_location(dataset, location_id, start_date, end_date):
-    # create data frame for each location
-    sub_df = pd.DataFrame({'location': location_id, 'date': pd.date_range(start=start_date, end=end_date)})
-    sub_df['Demand'] = 0
-    for i in range(len(sub_df)):
-        loc_date_row = dataset[(dataset['PULocationID']==sub_df['location'][i]) & (dataset['PU_date']==sub_df['date'][i])]
-        if not loc_date_row.empty:
-            sub_df['Demand'][i] = loc_date_row['Demand']
-    return sub_df
-```
-
-```{python}
-def get_label(dataset):
-    start_date = dataset['PU_date'].min()
-    end_date = dataset['PU_date'].max()
-
-    location_ids = dataset.PULocationID.unique()
-    sub_dfs = []
-    for location_id in location_ids:
-        sub_dfs.append(complete_dataset_for_each_location(dataset, location_id, start_date, end_date))
-    data_modified = pd.concat(sub_dfs).reset_index(drop=True)
-    return data_modified
+def labeling(dataset):
+    dataset_labels = dataset.groupby(['PULocationID', 'PU_date'])['PU_date'].count().to_frame('Demand')\
+        .sort_values(['PULocationID', 'PU_date'], ascending=[True, True]).reset_index()\
+        .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
+        
+    locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
+    dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
+    # create a DataFrame for all locations and dates
+    loc_date_df = locations.merge(dates, how='cross').\
+        sort_values(['Location', 'Date'], ascending=[True, True]).reset_index(drop=True)
+    # Fill the DataFrame with demands
+    labels_df = loc_date_df.merge(dataset_labels, how='left', on=['Location', 'Date']).fillna(value=0)
     
+    return labels_df
 ```
 
 ```{python}
-data_1 = add_date_from_datetime(data_1, 'PU_date', 'tpep_pickup_datetime')
-data_2 = add_date_from_datetime(data_2, 'PU_date', 'tpep_pickup_datetime')
-data_3 = add_date_from_datetime(data_3, 'PU_date', 'tpep_pickup_datetime')
-data_4 = add_date_from_datetime(data_4, 'PU_date', 'tpep_pickup_datetime')
-```
-
-```{python}
-data_1_sort_by_PUloc_PUdate = count_demand_for_each_loc_and_date(data_1)
-data_2_sort_by_PUloc_PUdate = count_demand_for_each_loc_and_date(data_2)
-data_3_sort_by_PUloc_PUdate = count_demand_for_each_loc_and_date(data_3)
-data_4_sort_by_PUloc_PUdate = count_demand_for_each_loc_and_date(data_4)
-```
-
-## concatenating all data
-
-```{python}
-concat_data_by_loc_date = pd.concat([data_1_sort_by_PUloc_PUdate, data_2_sort_by_PUloc_PUdate,
-                                     data_3_sort_by_PUloc_PUdate, data_4_sort_by_PUloc_PUdate]).reset_index(drop=True)
-```
-
-```{python}
-labels = get_label(concat_data_by_loc_date)
+labels_df = labeling(rides_df)
+print(f'labels_df shape : {labels_df.shape}')
+labels_df.head()
 ```
 
 # File saving
 
 ```{python}
-def save_labels(labels_df, path):
-    with open(path, 'w', encoding='utf-8-sig') as f:
-        labels_df.to_csv(f, index=False)
+def save_labels(dataset, path):
+    labels_df = dataset.to_parquet(path, index=False)
 ```
 
 ```{python}
-save_labels(labels, 'labeling/labels.csv')
+save_labels(labels_df, OUTPUT_PATH)
 ```
