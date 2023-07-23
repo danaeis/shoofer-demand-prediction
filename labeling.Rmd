@@ -27,31 +27,29 @@ import datetime
 # Add your input and output path
 INPUT_PATH = 'ride_data/'
 OUTPUT_PATH = 'data/labels.parquet'
+# Start date (first month) , End date (last month)
+start_date, end_date = '2023-01-01', '2023-04-30'    # January --> April
 ```
 
 # Loading Dataset
 
 ```{python}
-def load_data(path):
+def load_data(path, start_date: str, end_date: str):
     df = pd.read_parquet(path) 
-    return df
-```
-
-```{python}
-def pre_processing(dataset, start_date: str, end_date: str):
-    # Clean data based on the date
+    # Filter data based on the date
     start_date = datetime.date.fromisoformat(start_date)
     end_date = datetime.date.fromisoformat(end_date)
-    clean_dataset = dataset[(dataset['tpep_pickup_datetime'].dt.date >= start_date) &
-                            (dataset['tpep_pickup_datetime'].dt.date <= end_date)]
+    filtered_df = df[(df['tpep_pickup_datetime'].dt.date >= start_date) &
+                     (df['tpep_pickup_datetime'].dt.date <= end_date)]
+    # Keep essential columns
+    dataset = filtered_df.filter(items=['tpep_pickup_datetime', 'PULocationID'])
     # Add a new column for pick-up date
-    clean_dataset['PU_date'] = pd.to_datetime(clean_dataset['tpep_pickup_datetime'].dt.date)
-    return clean_dataset
+    dataset['PU_date'] = pd.to_datetime(dataset['tpep_pickup_datetime'].dt.date)
+    return dataset
 ```
 
 ```{python}
-rides_df = pre_processing(load_data(INPUT_PATH), '2023-01-01', '2023-04-30')  # January --> April
-
+rides_df = load_data(INPUT_PATH, start_date, end_date)
 print(f'rides_df shape : {rides_df.shape}')
 rides_df.head()
 ```
