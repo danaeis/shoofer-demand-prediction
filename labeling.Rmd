@@ -24,11 +24,10 @@ import datetime
 # Config
 
 ```{python}
-# Add your input and output path
 INPUT_PATH = 'ride_data/'
 OUTPUT_PATH = 'data/labels.parquet'
-# Start date (first month) , End date (last month)
-start_date, end_date = '2023-01-01', '2023-04-30'    # January --> April
+START_DATE = '2023-01-01'
+END_DATE = '2023-04-30'
 ```
 
 # Loading Dataset
@@ -36,20 +35,17 @@ start_date, end_date = '2023-01-01', '2023-04-30'    # January --> April
 ```{python}
 def load_data(path, start_date: str, end_date: str):
     df = pd.read_parquet(path) 
-    # Filter data based on the date
     start_date = datetime.date.fromisoformat(start_date)
     end_date = datetime.date.fromisoformat(end_date)
     filtered_df = df[(df['tpep_pickup_datetime'].dt.date >= start_date) &
                      (df['tpep_pickup_datetime'].dt.date <= end_date)]
-    # Keep essential columns
     dataset = filtered_df.filter(items=['tpep_pickup_datetime', 'PULocationID'])
-    # Add a new column for pick-up date
     dataset['PU_date'] = pd.to_datetime(dataset['tpep_pickup_datetime'].dt.date)
     return dataset
 ```
 
 ```{python}
-rides_df = load_data(INPUT_PATH, start_date, end_date)
+rides_df = load_data(INPUT_PATH, START_DATE, END_DATE)
 print(f'rides_df shape : {rides_df.shape}')
 rides_df.head()
 ```
@@ -58,17 +54,31 @@ rides_df.head()
 
 ```{python}
 def labeling(dataset):
-    dataset_labels = dataset.groupby(['PULocationID', 'PU_date'])['PU_date'].count().to_frame('Demand')\
-        .sort_values(['PULocationID', 'PU_date'], ascending=[True, True]).reset_index()\
+    dataset_labels = (
+        dataset
+        .groupby(['PULocationID', 'PU_date'])['PU_date']
+        .count()
+        .to_frame('Demand')
+        .sort_values(['PULocationID', 'PU_date'], ascending=[True, True])
+        .reset_index()
         .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
-        
+    )
+  
     locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
     dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
-    # create a DataFrame for all locations and dates
-    loc_date_df = locations.merge(dates, how='cross').\
-        sort_values(['Location', 'Date'], ascending=[True, True]).reset_index(drop=True)
-    # Fill the DataFrame with demands
-    labels_df = loc_date_df.merge(dataset_labels, how='left', on=['Location', 'Date']).fillna(value=0)
+    
+    loc_date_df = (
+        locations
+        .merge(dates, how='cross')
+        .sort_values(['Location', 'Date'], ascending=[True, True])
+        .reset_index(drop=True)
+    )
+    
+    labels_df = (
+        loc_date_df
+        .merge(dataset_labels, how='left', on=['Location', 'Date'])
+        .fillna(value=0)
+    )
     
     return labels_df
 ```
