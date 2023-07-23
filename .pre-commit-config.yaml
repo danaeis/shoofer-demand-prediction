@@ -1,11 +1,8 @@
-
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.3.0
+-   repo: local
     hooks:
-    -   id: check-yaml
-    -   id: trailing-whitespace
--   repo: https://github.com/psf/black
-    rev: 22.10.0
-    hooks:
-    -   id: black
+    - id: jupytext
+      name: jupytext
+      entry: jupytext --from ipynb --to Rmd --pre-commit
+      pass_filenames: false
+      language: python
