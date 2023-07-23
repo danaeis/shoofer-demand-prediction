@@ -15,10 +15,9 @@ jupyter:
 # Imports
 
 ```{python}
+import datetime
 import numpy as np
 import pandas as pd
-
-import datetime
 ```
 
 # Config
@@ -67,7 +66,7 @@ def labeling(dataset):
     locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
     dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
     
-    loc_date_df = (
+    location_date_df = (
         locations
         .merge(dates, how='cross')
         .sort_values(['Location', 'Date'], ascending=[True, True])
@@ -75,7 +74,7 @@ def labeling(dataset):
     )
     
     labels_df = (
-        loc_date_df
+        location_date_df
         .merge(dataset_labels, how='left', on=['Location', 'Date'])
         .fillna(value=0)
     )
