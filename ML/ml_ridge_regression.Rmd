@@ -16,43 +16,49 @@ jupyter:
 <!-- #endregion -->
 
 ```{python id="AnwSHO1L97I5"}
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import datetime
 from itertools import product
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
 import xgboost as xgb
-import os
 ```
 
+<!-- #region id="pSSMa3G2wGmF" -->
 # Configs
+<!-- #endregion -->
 
-
+<!-- #region id="MxbN2VgHwGmG" -->
 ## Constant Values
+<!-- #endregion -->
 
-```{python}
-# Add your input and output path
-INPUT_PATH = 'datasets/'
+```{python id="zIkDLK9zwGmG"}
+INPUT_PATH = 'shoofer-demand-prediction/ML/datasets/'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-train_list = ['prev_month_demand', 'prev_2week_demand', 'prev_week_demand', 'prev_day_demand', 'month', 'day_month', 'day_week']
+feature_list = ['prev_month_demand', 'prev_2week_demand', 'prev_week_demand', 'prev_day_demand', 'month', 'day_month', 'day_week']
 
-test_size = 0.5
+test_size_ratio = 0.5
 ```
 
-<!-- #region id="rGhdilSeZosS" -->
-## Functions
+<!-- #region id="5eS5BQE9wGmK" -->
+# Data preparation
+
 <!-- #endregion -->
 
-```{python}
+<!-- #region id="TWsjXbpaznc_" -->
+## Load Data
+<!-- #endregion -->
+
+```{python id="HAyNjqxNwGmH"}
 def load_data(path, start_date: str, end_date: str):
-    df = pd.read_parquet(path) 
+    df = pd.read_parquet(path)
     start_date = datetime.date.fromisoformat(start_date)
     end_date = datetime.date.fromisoformat(end_date)
     filtered_df = df[(df['tpep_pickup_datetime'].dt.date >= start_date) &
@@ -62,7 +68,20 @@ def load_data(path, start_date: str, end_date: str):
     return dataset
 ```
 
-```{python}
+```{python id="87BFHUu1-z73"}
+rides_df = load_data(INPUT_PATH, START_DATE, END_DATE)
+```
+
+```{python id="hCN-11QT3bp1"}
+print(f'rides dataframe shape : {rides_df.shape}')
+rides_df.head()
+```
+
+<!-- #region id="X2ES_CY6-fb5" -->
+## Labeling
+<!-- #endregion -->
+
+```{python id="a7mNMQ-zwGmH"}
 def labeling(dataset):
     dataset_labels = (
         dataset
@@ -73,50 +92,39 @@ def labeling(dataset):
         .reset_index()
         .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
     )
-  
+
     locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
     dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
-    
-    loc_date_df = (
+
+    location_date_df = (
         locations
         .merge(dates, how='cross')
         .sort_values(['Location', 'Date'], ascending=[True, True])
         .reset_index(drop=True)
     )
-    
+
     labels_df = (
-        loc_date_df
+        location_date_df
         .merge(dataset_labels, how='left', on=['Location', 'Date'])
         .fillna(value=0)
     )
-    
+
     return labels_df
+
 ```
 
-```{python}
-def date_format_modifier(data):  # Year/Month/Day
-    data['month'] = data['Date'].dt.month
-    data['day_month'] = data['Date'].dt.day
-    data['day_week'] = data['Date'].dt.dayofweek
-    return data
+```{python id="VVRLakW_LeGp"}
+labeled_df = labeling(rides_df)
 ```
 
-```{python}
-def train_test_splitting(dataset, test_size):
-    start_date = dataset['Date'].min()
-    end_date = dataset['Date'].max()
-    all_days = end_date - start_date
-    
-    train_df = dataset[(dataset['Date'] - start_date) < (1 - test_size) * all_days]
-    test_df = dataset[(dataset['Date'] - start_date) >= (1 - test_size) * all_days]
-
-    return train_df, test_df
+```{python id="0Gm5j5em28Xy"}
+print(f'labeled dataframe shape : {labeled_df.shape}')
+labeled_df.head()
 ```
 
-```{python id="BcGvcilUWEEC"}
-def evaluate(metric, metric_name, true_values, predicted_values):
-    print(f'{metric_name} : {metric(true_values, predicted_values)}')
-```
+<!-- #region id="G0W2pR-70JJb" -->
+## Add Feature
+<!-- #endregion -->
 
 ```{python id="ifvk6uWS6hnT"}
 def add_features(data):  # run after merging datasets and modifing date
@@ -125,33 +133,135 @@ def add_features(data):  # run after merging datasets and modifing date
     data['prev_week_demand'] = data.groupby(['Location'])['Demand'].shift(7)
     data['prev_2week_demand'] = data.groupby(['Location'])['Demand'].shift(14)
     data['prev_month_demand'] = data.groupby(['Location'])['Demand'].shift(28)
-    
+
     data = data.dropna()
 
     return data
 ```
 
+```{python id="12zNfv8YwGmK"}
+features_df = add_features(labeled_df)
+```
+
+```{python id="bJxWEkiD3VOZ"}
+print(f'features dataframe shape : {features_df.shape}')
+features_df.head()
+```
+
+<!-- #region id="7gXEv3Lm0ro0" -->
+## Extract Calendar features
+<!-- #endregion -->
+
+```{python id="ZXCqsW6swGmI"}
+def add_calendar_features(data):  # Year/Month/Day
+    data['month'] = data['Date'].dt.month
+    data['day_month'] = data['Date'].dt.day
+    data['day_week'] = data['Date'].dt.dayofweek
+
+    data['day_year'] = 0
+    start_date = data['Date'].min()
+
+    for index, row in data.iterrows():
+
+        curr_date = row['Date']
+        day_number = (curr_date - start_date).days
+
+        data.at[index, 'day_year'] = day_number
+    return data
+```
+
+```{python id="8pGrqumFwGmK"}
+date_features_df = add_calendar_features(features_df)
+```
+
+```{python id="nh6jS7qG3MiV"}
+print(f'date_features dataframe shape : {date_features_df.shape}')
+date_features_df.head()
+```
+
+<!-- #region id="zN0kp6jw03DP" -->
+## Split Train and Test Data
+<!-- #endregion -->
+
+```{python id="CMY1G1lmwGmI"}
+def train_test_splitting(dataset, test_size):
+    start_date = dataset['Date'].min()
+    end_date = dataset['Date'].max()
+    all_days = end_date - start_date
+
+    train_df = dataset[(dataset['Date'] - start_date) < (1 - test_size) * all_days]
+    test_df = dataset[(dataset['Date'] - start_date) >= (1 - test_size) * all_days]
+
+    return train_df, test_df
+```
+
+```{python id="3xH4VMGNwGmK"}
+train_df, test_df = train_test_splitting(date_features_df, test_size_ratio)
+```
+
+```{python id="xxGdRZfqwGmL", outputId="58609337-c472-48f5-c7fc-e9d7c17aba4f"}
+print(f'train dataframe shape : {train_df.shape}')
+train_df.head()
+```
+
+```{python id="uPbINwH224Hy"}
+print(f'test dataframe shape : {test_df.shape}')
+test_df.head()
+```
+
+<!-- #region id="xf8ChW_7wGmL" -->
+# Model Training
+<!-- #endregion -->
+
+<!-- #region id="PxYfxyCHz_Z3" -->
+## **Ridge Regression**
+<!-- #endregion -->
+
+<!-- #region id="CJn4YIBtKcL_" -->
+### Model Tuning
+<!-- #endregion -->
+
 ```{python id="sOMPo5ryBm8g"}
-def grid_search(model, test_parameters, train_data, cv = None):
+def grid_search(model, test_parameters, train_data, cv = None, feature_list = feature_list):
     gs = GridSearchCV(estimator = model, param_grid = test_parameters, scoring = 'neg_root_mean_squared_error', cv = cv, n_jobs = -1)
-    gs.fit(train_data[train_list], train_data['Demand'])
+    gs.fit(train_data[feature_list], train_data['Demand'])
     return gs.best_params_, gs.best_score_
 ```
 
-```{python id="pbhM5Oe6PjW7"}
-def model_predict(model, train_data, test_data):
-
-    model.fit(train_data[train_list], train_data['Demand'])
-
-
-    yhat_train = model.predict(train_data[train_list])
-    yhat_test = model.predict(test_data[train_list])
-
-    return yhat_train, yhat_test
+```{python colab={'base_uri': 'https://localhost:8080/'}, id="KlE1fodhQZ-x", outputId="78b6789c-03f9-4639-e94c-57bfac1c04dd"}
+model = Ridge()
+best_params, best_score = grid_search(model, {'alpha':[1, 10, 100, 1000, 1000]},
+                                      train_df, cv = 5, feature_list = feature_list)
+print(best_params, best_score)
 ```
 
+<!-- #region id="AxN2E_9Q1yHS" -->
+### Prediction
+<!-- #endregion -->
+
+```{python id="pbhM5Oe6PjW7"}
+def model_predict(model, train_data, test_data, feature_list):
+
+    model.fit(train_data[feature_list], train_data['Demand'])
+
+
+    train_predict_df  = model.predict(train_data[feature_list])
+    test_predict_df  = model.predict(test_data[feature_list])
+
+    return train_predict_df, test_predict_df
+```
+
+```{python id="MulwYZc7LK7v"}
+model = Ridge(**best_params)
+yhat_train, yhat_test = model_predict(model, train_df, test_df, feature_list)
+```
+
+<!-- #region id="jJYHtg2oRqvS" -->
+### Visualization
+<!-- #endregion -->
+
 ```{python id="ao6nw8xsRvB9"}
-def predict_visualizer(train_data, test_data, yhat_train, yhat_test):
+def prediction_visualization(train_data, test_data, yhat_train, yhat_test):
 
     predicted_train_df = train_data.copy(deep = True)
     predicted_test_df = test_data.copy(deep = True)
@@ -177,6 +287,19 @@ def predict_visualizer(train_data, test_data, yhat_train, yhat_test):
     plt.show()
 ```
 
+```{python colab={'base_uri': 'https://localhost:8080/', 'height': 887}, id="gOyNantNRtda", outputId="dc7796cf-c196-421d-bd56-1d312334dee4"}
+prediction_visualization(train_df, test_df, yhat_train, yhat_test)
+```
+
+<!-- #region id="RBsqB5hnSuPP" -->
+### Evaluation
+<!-- #endregion -->
+
+```{python id="BcGvcilUWEEC"}
+def evaluate(metric, metric_name, true_values, predicted_values):
+    print(f'{metric_name} : {metric(true_values, predicted_values)}')
+```
+
 ```{python id="v4-GWghuSbnA"}
 def evaluation(model_name, train_data, test_data, yhat_train, yhat_test):
     print(f'{model_name} train scores:')
@@ -192,84 +315,6 @@ def evaluation(model_name, train_data, test_data, yhat_train, yhat_test):
     evaluate(mean_squared_error, 'MSE', test_data['Demand'], yhat_test)
 
 ```
-
-```{python}
-def day_of_year_modifier(dataset):
-    dataset['day_year'] = 0
-    start_date = dataset['Date'].min()
-
-    for index, row in dataset.iterrows():
-        # Get the day and month values from the current row
-        curr_date = row['Date']
-        day_number = (curr_date - start_date).days
-
-        dataset.at[index, 'day_year'] = day_number
-    return dataset
-```
-
-# Load dataset
-
-```{python id="87BFHUu1-z73"}
-rides_df = load_data(INPUT_PATH, START_DATE, END_DATE)
-```
-
-<!-- #region id="X2ES_CY6-fb5" -->
-# Preprocess
-<!-- #endregion -->
-
-```{python id="VVRLakW_LeGp"}
-labeled_df = labeling(rides_df)
-```
-
-```{python}
-featured_df = add_features(labeled_df)
-```
-
-```{python}
-dated_df = date_format_modifier(featured_df)
-dated_df = day_of_year_modifier(dated_df)
-```
-
-```{python}
-train_df, test_df = train_test_splitting(dated_df, test_size)
-```
-
-```{python}
-train_df
-```
-
-# Model Training
-
-<!-- #region id="PxYfxyCHz_Z3" -->
-## **Ridge Regression**
-<!-- #endregion -->
-
-<!-- #region id="CJn4YIBtKcL_" -->
-### Grid search to find best hyper parameters
-<!-- #endregion -->
-
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="KlE1fodhQZ-x", outputId="78b6789c-03f9-4639-e94c-57bfac1c04dd"}
-model = Ridge()
-best_params, best_score = grid_search(model, {'alpha':[1, 10, 100, 1000, 1000]}, train_df, cv = 5)
-print(best_params, best_score)
-```
-
-```{python id="MulwYZc7LK7v"}
-model = Ridge(**best_params)
-yhat_train, yhat_test = model_predict(model, train_df, test_df)
-```
-
-<!-- #region id="jJYHtg2oRqvS" -->
-### Visualization
-<!-- #endregion -->
-
-```{python colab={'base_uri': 'https://localhost:8080/', 'height': 887}, id="gOyNantNRtda", outputId="dc7796cf-c196-421d-bd56-1d312334dee4"}
-predict_visualizer(train_df, test_df, yhat_train, yhat_test)
-```
-
-<!-- #region id="RBsqB5hnSuPP" -->
-### Evaluation
-<!-- #endregion -->
 
 ```{python colab={'base_uri': 'https://localhost:8080/'}, id="vUBqNgIwSwKe", outputId="c05d64b8-b525-458d-96db-757e94a57d89"}
 evaluation('Ridge Regression', train_df, test_df, yhat_train, yhat_test)
