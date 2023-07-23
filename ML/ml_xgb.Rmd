@@ -27,6 +27,7 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
 import xgboost as xgb
 import os
+import shap
 ```
 
 <!-- #region id="PVbrUy-T1IJZ" -->
@@ -335,4 +336,10 @@ evaluation('XGB', train_df, test_df, yhat_train, yhat_test)  # for whole data
 ```{python id="osueYsNP1NB8", outputId="b3c13ee6-bd74-4470-a8c5-558df5416e28"}
 xgb.plot_importance(model)
 plt.show()
+```
+
+```{python}
+explainer = shap.TreeExplainer(model)
+shap_values = explainer.shap_values(dtrain_reg)
+shap.summary_plot(shap_values, train_df[train_list])
 ```
