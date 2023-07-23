@@ -1,7 +1,0 @@
-#Data sets#
-###########
-*.parquet
-
-#Config files#
-##############
-*.yaml
