@@ -38,7 +38,7 @@ import shap
 <!-- #endregion -->
 
 ```{python id="zIkDLK9zwGmG"}
-INPUT_PATH = 'datasets/'
+INPUT_PATH = 'shoofer-demand-prediction/ML/datasets/'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
