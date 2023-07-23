@@ -44,9 +44,9 @@ INPUT_PATH = 'datasets/'
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-train_list = ['prev_2week_demand', 'prev_week_demand', 'prev_day_demand', 'month', 'day_month', 'day_week']
+train_list = ['prev_month_demand', 'prev_2week_demand', 'prev_week_demand', 'prev_day_demand', 'month', 'day_month', 'day_week']
 
-test_size = 0.25
+test_size = 0.5
 ```
 
 <!-- #region id="rGhdilSeZosS" -->
@@ -128,6 +128,7 @@ def add_features(data):  # run after merging datasets and modifing date
     data['prev_day_demand'] = data.groupby(['Location'])['Demand'].shift(1)
     data['prev_week_demand'] = data.groupby(['Location'])['Demand'].shift(7)
     data['prev_2week_demand'] = data.groupby(['Location'])['Demand'].shift(14)
+    data['prev_month_demand'] = data.groupby(['Location'])['Demand'].shift(28)
 
     data = data.dropna()
 
