@@ -44,7 +44,7 @@ END_DATE = '2023-04-30'
 
 train_list = ['prev_day_demand', 'month', 'day_month', 'day_week']
 
-test_size = 0.5
+test_size = 0.25
 ```
 
 <!-- #region id="rGhdilSeZosS" -->
@@ -82,10 +82,9 @@ def labeling(dataset):
 
 ```{python}
 def date_format_modifier(data):  # Year/Month/Day
-    data['month'] = pd.DataFrame([int(date.strftime("%m")) for date in data['Date']])
-    data['day_month'] = pd.DataFrame([int(date.strftime("%d")) for date in data['Date']])
-    data['day_week'] = pd.DataFrame([int(date.weekday()) for date in data['Date']])
-    data = data.dropna()
+    data['month'] = data['Date'].dt.month
+    data['day_month'] = data['Date'].dt.day
+    data['day_week'] = data['Date'].dt.dayofweek
     return data
 ```
 
@@ -96,7 +95,7 @@ def train_test_splitting(dataset, test_size):
     all_days = end_date - start_date
     
     train_df = dataset[(dataset['Date'] - start_date) < (1 - test_size) * all_days]
-    test_df = dataset[(end_date - dataset['Date']) <= test_size * all_days]
+    test_df = dataset[(dataset['Date'] - start_date) >= (1 - test_size) * all_days]
 
     return train_df, test_df
 ```
