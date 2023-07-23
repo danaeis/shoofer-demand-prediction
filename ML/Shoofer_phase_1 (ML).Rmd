@@ -44,7 +44,7 @@ END_DATE = '2023-04-30'
 
 train_list = ['prev_day_demand', 'month', 'day_month', 'day_week']
 
-test_size = 0.25
+test_size = 0.2
 ```
 
 <!-- #region id="rGhdilSeZosS" -->
@@ -123,7 +123,7 @@ def grid_search(model, test_parameters, train_data, cv = None):
 ```
 
 ```{python id="pbhM5Oe6PjW7"}
-def point_predict(model, train_data, test_data):
+def model_predict(model, train_data, test_data):
 
     model.fit(train_data[train_list], train_data['Demand'])
 
@@ -135,7 +135,7 @@ def point_predict(model, train_data, test_data):
 ```
 
 ```{python id="ao6nw8xsRvB9"}
-def point_predict_visualizer(train_data, test_data, yhat_train, yhat_test):
+def predict_visualizer(train_data, test_data, yhat_train, yhat_test):
 
     predicted_train_df = train_data.copy(deep = True)
     predicted_test_df = test_data.copy(deep = True)
@@ -240,7 +240,7 @@ print(best_params, best_score)
 
 ```{python id="MulwYZc7LK7v"}
 model = Ridge(**best_params)
-yhat_train, yhat_test = point_predict(model, train_df, test_df)
+yhat_train, yhat_test = model_predict(model, train_df, test_df)
 ```
 
 <!-- #region id="jJYHtg2oRqvS" -->
@@ -248,7 +248,7 @@ yhat_train, yhat_test = point_predict(model, train_df, test_df)
 <!-- #endregion -->
 
 ```{python colab={'base_uri': 'https://localhost:8080/', 'height': 887}, id="gOyNantNRtda", outputId="dc7796cf-c196-421d-bd56-1d312334dee4"}
-point_predict_visualizer(train_df, test_df, yhat_train, yhat_test)
+predict_visualizer(train_df, test_df, yhat_train, yhat_test)
 ```
 
 <!-- #region id="RBsqB5hnSuPP" -->
