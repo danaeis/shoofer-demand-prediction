@@ -33,10 +33,6 @@ import shap
 # Configs
 <!-- #endregion -->
 
-<!-- #region id="MxbN2VgHwGmG" -->
-## Constant Values
-<!-- #endregion -->
-
 ```{python id="zIkDLK9zwGmG"}
 INPUT_PATH = 'shoofer-demand-prediction/ML/datasets/'
 
