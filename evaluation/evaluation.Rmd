@@ -126,7 +126,8 @@ def prepare_report(losses: pd.DataFrame, plot_label):
             'worst_accuracy_point': [losses['error'].idxmax()],
             'mean_accuracy': mean_threshold
         }
-    losses = pd.DataFrame(np.where(losses>120, 120, losses))
+    error_limit = 120
+    losses = pd.DataFrame(np.where(losses>error_limit, error_limit, losses))
     plot_acc(losses, plot_label)
 
     return report_dict
