@@ -27,7 +27,6 @@ Config
 <!-- #endregion -->
 
 ```{python}
-# Add your input path
 labeled_path = "../data/labels.parquet"
 ```
 
@@ -69,21 +68,18 @@ calculate loss functions
 
 ```{python}
 # fix_inf_val will add to numerator and denumerator to prevent having the inf value
-def calculate_loss_mape(actual_data, predicted_data, fix_inf = 10):
-    
+def calculate_loss_mape(actual_data, predicted_data, fix_inf = 1):
     losses_df = actual_data[['Location','Date']].copy()
     losses_df['actual_demand'] = actual_data.Demand
     losses_df['predicted_demand'] = predicted_data.Demand
     losses_df = losses_df.dropna()
 
-    fix_inf_val = np.where(losses_df['actual_demand']==0, fix_inf, losses_df['actual_demand'])
-    
-    losses_df['error'] = ((np.abs(losses_df['actual_demand']-losses_df['predicted_demand'])+fix_inf_val)/
+    fix_inf_val = np.where(losses_df['actual_demand']==0, fix_inf, losses_df['actual_demand'])    
+    losses_df['error'] = ((np.abs(losses_df['actual_demand']-losses_df['predicted_demand']))/
                           (losses_df['actual_demand']+fix_inf_val))*100
 
     loss_per_location = losses_df.groupby('Location').agg({'error':'mean'})
     loss_per_date = losses_df.groupby('Date').agg({'error':'mean'})
-
     return loss_per_location, loss_per_date
 
 ```
@@ -107,8 +103,8 @@ def plot_acc(losses: pd.DataFrame, label):
     plt.xlabel(str(label))
     plt.ylabel('Loss(mape)')
     title = 'Model Accuracy per '+ str(label)
+    plt.legend("error")
     plt.title(title)
-    plt.legend()
     plt.show()
 
 ```
@@ -118,20 +114,20 @@ Evaluate Model function
 <!-- #endregion -->
 
 ```{python}
-def prepare_report(loss: pd.DataFrame, plot_label):
-    min_threshhold = loss['error'].min()
-    max_threshhold = loss['error'].max()
-    mean_threshhold = loss['error'].mean()
+def prepare_report(losses: pd.DataFrame, plot_label):
+    min_threshold = losses.min()['error']
+    max_threshold = losses.max()['error']
+    mean_threshold = losses.mean()['error']
 
     report_dict = {
-            'best_accuracy': min_threshhold,
-            'best_accuracy_point': [loss['error'].idxmin()],
-            'worst_accuracy': max_threshhold,
-            'worst_accuracy_point': [loss['error'].idxmax()],
-            'mean_accuracy': mean_threshhold
+            'best_accuracy': min_threshold,
+            'best_accuracy_point': [losses['error'].idxmin()],
+            'worst_accuracy': max_threshold,
+            'worst_accuracy_point': [losses['error'].idxmax()],
+            'mean_accuracy': mean_threshold
         }
-    
-    plot_acc(loss, plot_label)
+    losses = pd.DataFrame(np.where(losses>120, 120, losses))
+    plot_acc(losses, plot_label)
 
     return report_dict
 ```
