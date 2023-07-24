@@ -69,10 +69,10 @@ calculate loss functions
 
 ```{python}
 # fix_inf_val will add to numerator and denumerator to prevent having the inf value
-def calculate_accuracy_mape(actual_data, predicted_data, fix_inf = 10):
+def calculate_loss_mape(actual_data, predicted_data, fix_inf = 10):
     
-    losses_df = dataset[['Location','Date']].copy()
-    losses_df['actual_demand'] = dataset.Demand
+    losses_df = actual_data[['Location','Date']].copy()
+    losses_df['actual_demand'] = actual_data.Demand
     losses_df['predicted_demand'] = predicted_data.Demand
     losses_df = losses_df.dropna()
 
@@ -89,7 +89,7 @@ def calculate_accuracy_mape(actual_data, predicted_data, fix_inf = 10):
 ```
 
 ```{python}
-loss_per_location, loss_per_date = calculate_accuracy_mape(dataset, predicted_data)
+loss_per_location, loss_per_date = calculate_loss_mape(dataset, predicted_data)
 loss_per_location.head()
 ```
 
@@ -138,7 +138,7 @@ def prepare_report(loss: pd.DataFrame, plot_label):
 
 ```{python}
 def evaluate_model(dataset, predicted_data):
-    loss_per_location, loss_per_date = calculate_accuracy_mape(dataset, predicted_data)
+    loss_per_location, loss_per_date = calculate_loss_mape(dataset, predicted_data)
     date_report_df = pd.DataFrame(prepare_report(loss_per_date, 'date'))
     loc_report_df = pd.DataFrame(prepare_report(loss_per_location, 'location'))
     return(date_report_df, loc_report_df)
