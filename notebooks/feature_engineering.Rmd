@@ -43,18 +43,11 @@ rides_df.head()
 
 ```{python}
 def feature_engineering(dataset):
-    locations = dataset['Location'].unique()
-    sub_dfs = []
-    for location in locations:
-        sub_df = rides_df[rides_df['Location'] == location].sort_values('Date', ascending=True)
-        sub_df['Previous_day_demand'] = sub_df['Demand'].shift(1)      
-        sub_df['Previous_week_demand'] = sub_df['Demand'].shift(7)     
-        sub_dfs.append(sub_df)
-    df = pd.concat(sub_dfs).reset_index(drop=True)
-    df['Day_of_week'] = df['Date'].dt.dayofweek   
-    df['Day_of_month'] = df['Date'].dt.day
-    features_df = df.filter(items=['Previous_day_demand', 'Previous_week_demand', 'Day_of_week', 'Day_of_month'])
-    return features_df
+    dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
+    dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
+    dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
+    dataset['Day_of_month'] = dataset['Date'].dt.day
+    return dataset
 ```
 
 ```{python}
