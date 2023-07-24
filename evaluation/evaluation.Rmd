@@ -93,18 +93,45 @@ loss_per_location.head()
 loss_per_date.head()
 ```
 
+```{python}
+# fix_inf_val will add to numerator and denumerator to prevent having the inf value
+def calculate_loss_rmse(actual_data, predicted_data):
+    losses_df = actual_data[['Location','Date']].copy()
+    losses_df['actual_demand'] = actual_data.Demand
+    losses_df['predicted_demand'] = predicted_data.Demand
+    losses_df = losses_df.dropna()
+
+    losses_df['error'] = np.square(np.subtract(losses_df['actual_demand'],losses_df['predicted_demand']))
+
+    loss_per_location = np.sqrt(losses_df.groupby('Location').agg({'error':'mean'}))
+    loss_per_date = np.sqrt(losses_df.groupby('Date').agg({'error':'mean'}))
+
+    return loss_per_location, loss_per_date
+
+```
+
+```{python}
+rmse_loss_per_location, rmse_loss_per_date = calculate_loss_rmse(dataset, predicted_data)
+rmse_loss_per_location.head()
+```
+
+```{python}
+rmse_loss_per_date.head()
+```
+
 <!-- #region notebookRunGroups={"groupValue": "2"} -->
 Plot accuracies function
 <!-- #endregion -->
 
 ```{python}
-def plot_acc(losses: pd.DataFrame, label):
+def plot_acc(losses: pd.DataFrame, label, min_threshold, mean_threshold):
     ax = losses.plot.bar(rot=0)
     plt.xlabel(str(label))
     plt.ylabel('Loss(mape)')
     title = 'Model Accuracy per '+ str(label)
     plt.legend("error")
     plt.title(title)
+
     plt.show()
 
 ```
@@ -114,7 +141,7 @@ Evaluate Model function
 <!-- #endregion -->
 
 ```{python}
-def prepare_report(losses: pd.DataFrame, plot_label):
+def prepare_report(losses: pd.DataFrame, plot_label, error_limit):
     min_threshold = losses.min()['error']
     max_threshold = losses.max()['error']
     mean_threshold = losses.mean()['error']
@@ -126,26 +153,53 @@ def prepare_report(losses: pd.DataFrame, plot_label):
             'worst_accuracy_point': [losses['error'].idxmax()],
             'mean_accuracy': mean_threshold
         }
-    error_limit = 120
-    losses = pd.DataFrame(np.where(losses>error_limit, error_limit, losses))
-    plot_acc(losses, plot_label)
+    
+    if error_limit>0 :
+        losses = pd.DataFrame(np.where(losses>error_limit, error_limit, losses))
+    plot_acc(losses, plot_label, min_threshold, mean_threshold)
 
     return report_dict
 ```
 
 ```{python}
-def evaluate_model(dataset, predicted_data):
-    loss_per_location, loss_per_date = calculate_loss_mape(dataset, predicted_data)
-    date_report_df = pd.DataFrame(prepare_report(loss_per_date, 'date'))
-    loc_report_df = pd.DataFrame(prepare_report(loss_per_location, 'location'))
+def evaluate_model(dataset, predicted_data, method, error_limit):
+    if method == 'mape':
+        loss_per_location, loss_per_date = calculate_loss_mape(dataset, predicted_data)
+    elif method == 'rmse':
+        loss_per_location, loss_per_date = calculate_loss_rmse(dataset, predicted_data)
+    date_report_df = pd.DataFrame(prepare_report(loss_per_date, 'date', error_limit))
+    loc_report_df = pd.DataFrame(prepare_report(loss_per_location, 'location', error_limit))
     return(date_report_df, loc_report_df)
-    
 ```
 
 ```{python}
-date_report_df, loc_report_df = evaluate_model(dataset, predicted_data)
+date_report_df, loc_report_df = evaluate_model(dataset, predicted_data, 'mape', 100)
 ```
 
 ```{python}
-print("date\n",date_report_df,"\nlocation\n", loc_report_df)
+print('mape per date')
+date_report_df.head()
+```
+
+```{python}
+print("mape per location")
+loc_report_df.head()
+```
+
+```{python}
+date_rmse_report_df, loc_rmse_report_df = evaluate_model(dataset, predicted_data, 'rmse', 0)
+```
+
+```{python}
+print('rmse per date')
+date_rmse_report_df.head()
+```
+
+```{python}
+print("rmse per location")
+loc_rmse_report_df.head()
+```
+
+```{python}
+
 ```
