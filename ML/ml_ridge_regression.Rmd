@@ -308,29 +308,26 @@ train_prediction_df , test_prediction_df  = model_predict(model, train_df, test_
 ### Visualization
 <!-- #endregion -->
 
+```{python}
+def add_day_of_year(data):
+    data['day_year'] = 0
+    start_date = data['Date'].min()
+
+    for index, row in data.iterrows():
+
+        curr_date = row['Date']
+        day_number = (curr_date - start_date).days
+
+        data.at[index, 'day_year'] = day_number
+    return data
+```
+
 ```{python id="ao6nw8xsRvB9"}
 def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
 
 
-    train_data['day_year'] = 0
-    start_date = train_data['Date'].min()
-
-    for index, row in train_data.iterrows():
-
-        curr_date = row['Date']
-        day_number = (curr_date - start_date).days
-
-        train_data.at[index, 'day_year'] = day_number
-
-    test_data['day_year'] = 0
-    start_date = test_data['Date'].min()
-
-    for index, row in test_data.iterrows():
-
-        curr_date = row['Date']
-        day_number = (curr_date - start_date).days
-
-        test_data.at[index, 'day_year'] = day_number
+    train_data = add_day_of_year(train_data)
+    test_data = add_day_of_year(test_data)
 
     predicted_train_df = train_data
     predicted_test_df = test_data
