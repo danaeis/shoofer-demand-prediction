@@ -196,7 +196,7 @@ def grid_search(model, test_parameters, train_data, cv = None, feature_list = FE
 model = Ridge()
 best_params, best_score = grid_search(
     model, 
-    {'alpha':[1e6]},
+    {'alpha':[125000, 126000, 127000]},
     train_df, 
     cv = 5, 
     feature_list = FEATURE_LIST
