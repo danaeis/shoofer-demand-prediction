@@ -38,16 +38,16 @@ import shap
 <!-- #endregion -->
 
 ```{python id="zIkDLK9zwGmG"}
-INPUT_PATH = 'datasets/'
+INPUT_PATH = 'shoofer-demand-prediction/ML/datasets/'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-feature_list = ['prev_month_demand', 'prev_2week_demand', 'prev_week_demand', 'prev_day_demand', 
-                'pre_min_week_demand', 'pre_max_week_demand', 'pre_mean_week_demand', 
-                'pre_std_week_demand', 'month', 'day_month', 'day_week']
+feature_list = ['prev_week_demand', 'prev_day_demand', 'month', 'day_month', 'day_week']
 
 test_size_ratio = 0.25
+
+AUTO_TUNE = False
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -130,19 +130,9 @@ labeled_df.head()
 <!-- #endregion -->
 
 ```{python id="ifvk6uWS6hnT"}
-def add_features(data):  # run after merging datasets and modifing date
-    # Lag features
+def add_features(data):
     data['prev_day_demand'] = data.groupby(['Location'])['Demand'].shift(1)
     data['prev_week_demand'] = data.groupby(['Location'])['Demand'].shift(7)
-    data['prev_2week_demand'] = data.groupby(['Location'])['Demand'].shift(14)
-    data['prev_month_demand'] = data.groupby(['Location'])['Demand'].shift(28)
-
-    # Summary features
-    window = data['Demand'].rolling(window = 7)
-    data['pre_min_week_demand'] = window.min()
-    data['pre_mean_week_demand'] = window.mean()
-    data['pre_max_week_demand'] = window.max()
-    data['pre_std_week_demand'] = window.std()
     
     data = data.dropna()
 
@@ -163,20 +153,11 @@ features_df.head()
 <!-- #endregion -->
 
 ```{python id="ZXCqsW6swGmI"}
-def add_calendar_features(data):  # Year/Month/Day
+def add_calendar_features(data):
     data['month'] = data['Date'].dt.month
     data['day_month'] = data['Date'].dt.day
     data['day_week'] = data['Date'].dt.dayofweek
 
-    data['day_year'] = 0
-    start_date = data['Date'].min()
-
-    for index, row in data.iterrows():
-
-        curr_date = row['Date']
-        day_number = (curr_date - start_date).days
-
-        data.at[index, 'day_year'] = day_number
     return data
 ```
 
@@ -233,60 +214,45 @@ test_df.head()
 
 ```{python id="sOMPo5ryBm8g"}
 def grid_search(model, test_parameters, train_data, feature_list, cv = None):
-    gs = GridSearchCV(estimator = model, param_grid = test_parameters, scoring = 'neg_root_mean_squared_error', cv = cv, n_jobs = -1)
+    gs = GridSearchCV(
+        estimator = model, 
+        param_grid = test_parameters, 
+        scoring = 'neg_root_mean_squared_error', 
+        cv = cv, 
+        n_jobs = -1
+        )
+    
     gs.fit(train_data[feature_list], train_data['Demand'])
     return gs.best_params_, gs.best_score_
 ```
 
 ```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
-param_test = {'max_depth':range(2,10,2), 'min_child_weight':range(1,6,2)}
+if AUTO_TUNE:
+    params_test = {'learning_rate':[0.1, 0.08, 0.06, 0.04, 0.02, 0.01], 
+                'subsample':[0.8, 0.9, 1], 
+                'colsample_bytree':[0.8, 0.9, 1], 
+                'max_depth':range(2,10,1), 
+                'gamma':[0, 1, 5]
+                }
+    params = {"objective": "reg:squarederror"}
 
-params = {"objective": "reg:squarederror", "tree_method": "gpu_hist", 'n_estimators':140, 'learning_rate':0.1, 'max_depth':5,
-         'min_child_weight':1, 'gamma':0, 'subsample':0.8, 'colsample_bytree':0.8, 'seed':27}
-
-best_params, best_score = grid_search(model = xgb.XGBRegressor(**params), test_parameters = param_test,
-                                      train_data = train_df, feature_list = feature_list, cv = 5)
-print(best_params, best_score)
-```
-
-```{python id="f42LBpS81NB5", outputId="10c38a48-2453-478d-b9c3-ef14f69d0a97"}
-params.update(best_params)
-param_test = {'gamma':[i/10.0 for i in range(0,5)]}
-best_params, best_score = grid_search(model = xgb.XGBRegressor(**params), test_parameters = param_test, 
-                                      train_data = train_df, feature_list = feature_list, cv = 5)
-print(best_params, best_score)
-```
-
-```{python id="Q3ueVbP51NB5", outputId="0559917d-9449-4877-e73a-19ee91f272ae"}
-params.update(best_params)
-param_test = {'subsample':[i/10.0 for i in range(6,10)], 'colsample_bytree':[i/10.0 for i in range(6,10)]}
-best_params, best_score = grid_search(model = xgb.XGBRegressor(**params), test_parameters = param_test, 
-                                      train_data = train_df, feature_list = feature_list, cv = 5)
-print(best_params, best_score)
-```
-
-```{python id="NKP1ofzt1NB5", outputId="019ff031-de3a-4b8d-f5ee-c1fd408300fd"}
-params.update(best_params)
-param_test = {'reg_alpha':[1e-5, 1e-2, 0.1, 1, 100]}
-best_params, best_score = grid_search(model = xgb.XGBRegressor(**params), test_parameters = param_test, 
-                                      train_data = train_df, feature_list = feature_list, cv = 5)
-print(best_params, best_score)
-```
-
-```{python id="mqXEz5h31NB6", outputId="a608106f-c416-4486-f047-1c0b29e00895"}
-params.update(best_params)
-param_test = {'n_estimators':list(range(1000, 5001, 500)), 'learning_rate':[0.01]}
-best_params, best_score = grid_search(model = xgb.XGBRegressor(**params), test_parameters = param_test, 
-                                      train_data = train_df, feature_list = feature_list, cv = 5)
-print(best_params, best_score)
-```
-
-```{python id="fnIfCrYW1NB6", outputId="e3fdc3c1-3bd1-48ae-8ad5-c621ee1bc7c2"}
-params.update(best_params)
-param_test = {'n_estimators':list(range(15000, 20001, 500)), 'learning_rate':[0.001]}
-best_params, best_score = grid_search(model = xgb.XGBRegressor(**params), test_parameters = param_test, 
-                                      train_data = train_df, feature_list = feature_list, cv = 5)
-print(best_params, best_score)
+    best_params, best_score = grid_search(
+        model = xgb.XGBRegressor(**params), 
+        test_parameters = params_test,
+        train_data = train_df, 
+        feature_list = feature_list, 
+        cv = 5
+        )
+    
+    print(best_params, best_score)
+else:
+    best_params = {'colsample_bytree': 0.8, 
+                   'gamma': 0, 
+                   'learning_rate': 0.08, 
+                   'max_depth': 3, 
+                   'subsample': 0.8, 
+                   'n_estimators': 1000
+                   }
 ```
 
 <!-- #region id="H0IHB8t41NB6" -->
@@ -305,23 +271,38 @@ def model_predict(model, train_data, test_data, feature_list):
 ```
 
 ```{python id="5AdQtdSqN7m9"}
-params = {'learning_rate': 0.001, 'n_estimators': 15000, 'reg_alpha': 1, 'colsample_bytree': 0.6,
-          'subsample': 0.9, 'gamma': 0.0, 'max_depth': 2, 'min_child_weight': 5}
-model = xgb.XGBRegressor(**params)
-yhat_train, yhat_test = model_predict(model, train_df, test_df, feature_list)
+model = xgb.XGBRegressor(**best_params)
+train_prediction_df, test_prediction_df = model_predict(model, train_df, test_df, feature_list)
 ```
 
 <!-- #region id="J0EYl9KtTfo7" -->
 ### Visualization
 <!-- #endregion -->
 
+```{python}
+def add_day_of_year(data):
+    data['day_year'] = 0
+    start_date = data['Date'].min()
+
+    for index, row in data.iterrows():
+
+        curr_date = row['Date']
+        day_number = (curr_date - start_date).days
+
+        data.at[index, 'day_year'] = day_number
+    return data
+```
+
 ```{python id="ao6nw8xsRvB9"}
-def prediction_visualization(train_data, test_data, yhat_train, yhat_test):
+def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
+
+    train_data = add_day_of_year(train_data)
+    test_data = add_day_of_year(test_data)
 
     predicted_train_df = train_data
     predicted_test_df = test_data
-    predicted_train_df['Predicted'] = yhat_train
-    predicted_test_df['Predicted'] = yhat_test
+    predicted_train_df['Predicted'] = train_prediction_df
+    predicted_test_df['Predicted'] = test_prediction_df
 
     train_data = train_data.groupby('day_year')['Demand'].sum()
     test_data = test_data.groupby('day_year')['Demand'].sum()
@@ -343,7 +324,7 @@ def prediction_visualization(train_data, test_data, yhat_train, yhat_test):
 ```
 
 ```{python id="deyLWLmZThMJ", outputId="4d0094aa-099c-490f-aa82-281ee16bae01"}
-prediction_visualization(train_df, test_df, yhat_train, yhat_test)
+prediction_visualization(train_df, test_df, train_prediction_df, test_prediction_df)
 ```
 
 <!-- #region id="lERphf0kTist" -->
@@ -356,23 +337,23 @@ def evaluate(metric, metric_name, true_values, predicted_values):
 ```
 
 ```{python id="v4-GWghuSbnA"}
-def evaluation(model_name, train_data, test_data, yhat_train, yhat_test):
+def evaluation(model_name, train_data, test_data, train_prediction_df , test_prediction_df ):
     print(f'{model_name} train scores:')
 
 
-    evaluate(mean_absolute_error, 'MAE', train_data['Demand'], yhat_train)
-    evaluate(mean_squared_error, 'MSE', train_data['Demand'], yhat_train)
+    evaluate(mean_absolute_error, 'MAE', train_data['Demand'], train_prediction_df )
+    evaluate(mean_squared_error, 'MSE', train_data['Demand'], train_prediction_df )
 
     print(f'{model_name} test scores:')
 
 
-    evaluate(mean_absolute_error, 'MAE', test_data['Demand'], yhat_test)
-    evaluate(mean_squared_error, 'MSE', test_data['Demand'], yhat_test)
+    evaluate(mean_absolute_error, 'MAE', test_data['Demand'], test_prediction_df)
+    evaluate(mean_squared_error, 'MSE', test_data['Demand'], test_prediction_df)
 
 ```
 
 ```{python id="qSZwIFprTkqK", outputId="7ae94952-ec22-410a-9d26-6e05a96af6ab"}
-evaluation('XGB', train_df, test_df, yhat_train, yhat_test)  # for whole data
+evaluation('XGB', train_df, test_df, train_prediction_df, test_prediction_df)  # for whole data
 ```
 
 <!-- #region id="_286hlGi7VWD" -->
