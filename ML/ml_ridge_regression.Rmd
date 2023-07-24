@@ -25,15 +25,10 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
-import xgboost as xgb
 ```
 
 <!-- #region id="pSSMa3G2wGmF" -->
 # Configs
-<!-- #endregion -->
-
-<!-- #region id="MxbN2VgHwGmG" -->
-## Constant Values
 <!-- #endregion -->
 
 ```{python id="zIkDLK9zwGmG"}
@@ -42,9 +37,9 @@ INPUT_PATH = 'shoofer-demand-prediction/ML/datasets/'
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-feature_list = ['prev_month_demand', 'prev_2week_demand', 'prev_week_demand', 'prev_day_demand', 'month', 'day_month', 'day_week']
+feature_list = ['prev_week_demand', 'prev_day_demand', 'month', 'day_month', 'day_week']
 
-test_size_ratio = 0.5
+test_size_ratio = 0.25
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -127,12 +122,9 @@ labeled_df.head()
 <!-- #endregion -->
 
 ```{python id="ifvk6uWS6hnT"}
-def add_features(data):  # run after merging datasets and modifing date
-    # Lag features
+def add_features(data):
     data['prev_day_demand'] = data.groupby(['Location'])['Demand'].shift(1)
     data['prev_week_demand'] = data.groupby(['Location'])['Demand'].shift(7)
-    data['prev_2week_demand'] = data.groupby(['Location'])['Demand'].shift(14)
-    data['prev_month_demand'] = data.groupby(['Location'])['Demand'].shift(28)
 
     data = data.dropna()
 
@@ -153,20 +145,11 @@ features_df.head()
 <!-- #endregion -->
 
 ```{python id="ZXCqsW6swGmI"}
-def add_calendar_features(data):  # Year/Month/Day
+def add_calendar_features(data):
     data['month'] = data['Date'].dt.month
     data['day_month'] = data['Date'].dt.day
     data['day_week'] = data['Date'].dt.dayofweek
 
-    data['day_year'] = 0
-    start_date = data['Date'].min()
-
-    for index, row in data.iterrows():
-
-        curr_date = row['Date']
-        day_number = (curr_date - start_date).days
-
-        data.at[index, 'day_year'] = day_number
     return data
 ```
 
@@ -223,15 +206,80 @@ test_df.head()
 
 ```{python id="sOMPo5ryBm8g"}
 def grid_search(model, test_parameters, train_data, cv = None, feature_list = feature_list):
-    gs = GridSearchCV(estimator = model, param_grid = test_parameters, scoring = 'neg_root_mean_squared_error', cv = cv, n_jobs = -1)
+    gs = GridSearchCV(
+        estimator = model, 
+        param_grid = test_parameters, 
+        scoring = 'neg_root_mean_squared_error', 
+        cv = cv, 
+        n_jobs = -1
+        )
+    
     gs.fit(train_data[feature_list], train_data['Demand'])
     return gs.best_params_, gs.best_score_
 ```
 
 ```{python colab={'base_uri': 'https://localhost:8080/'}, id="KlE1fodhQZ-x", outputId="78b6789c-03f9-4639-e94c-57bfac1c04dd"}
 model = Ridge()
-best_params, best_score = grid_search(model, {'alpha':[1, 10, 100, 1000, 1000]},
-                                      train_df, cv = 5, feature_list = feature_list)
+best_params, best_score = grid_search(
+    model, 
+    {'alpha':[1, 10, 100, 1000, 10000]},
+    train_df, 
+    cv = 5, 
+    feature_list = feature_list
+    )
+
+print(best_params, best_score)
+```
+
+```{python}
+model = Ridge()
+best_params, best_score = grid_search(
+    model, 
+    {'alpha':[20000, 40000, 60000, 80000]},
+    train_df, 
+    cv = 5, 
+    feature_list = feature_list
+    )
+
+print(best_params, best_score)
+```
+
+```{python}
+model = Ridge()
+best_params, best_score = grid_search(
+    model, 
+    {'alpha':[1e5, 1.2e5, 1.4e5, 1.6e5]},
+    train_df, 
+    cv = 5, 
+    feature_list = feature_list
+    )
+
+print(best_params, best_score)
+```
+
+```{python}
+model = Ridge()
+best_params, best_score = grid_search(
+    model, 
+    {'alpha':[110000, 115000, 120000, 125000, 130000]},
+    train_df, 
+    cv = 5, 
+    feature_list = feature_list
+    )
+
+print(best_params, best_score)
+```
+
+```{python}
+model = Ridge()
+best_params, best_score = grid_search(
+    model, 
+    {'alpha':[124000, 125000, 126000]},
+    train_df, 
+    cv = 5, 
+    feature_list = feature_list
+    )
+
 print(best_params, best_score)
 ```
 
@@ -253,7 +301,7 @@ def model_predict(model, train_data, test_data, feature_list):
 
 ```{python id="MulwYZc7LK7v"}
 model = Ridge(**best_params)
-yhat_train, yhat_test = model_predict(model, train_df, test_df, feature_list)
+train_prediction_df , test_prediction_df  = model_predict(model, train_df, test_df, feature_list)
 ```
 
 <!-- #region id="jJYHtg2oRqvS" -->
@@ -261,12 +309,33 @@ yhat_train, yhat_test = model_predict(model, train_df, test_df, feature_list)
 <!-- #endregion -->
 
 ```{python id="ao6nw8xsRvB9"}
-def prediction_visualization(train_data, test_data, yhat_train, yhat_test):
+def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
 
-    predicted_train_df = train_data.copy(deep = True)
-    predicted_test_df = test_data.copy(deep = True)
-    predicted_train_df['Predicted'] = yhat_train
-    predicted_test_df['Predicted'] = yhat_test
+
+    train_data['day_year'] = 0
+    start_date = train_data['Date'].min()
+
+    for index, row in train_data.iterrows():
+
+        curr_date = row['Date']
+        day_number = (curr_date - start_date).days
+
+        train_data.at[index, 'day_year'] = day_number
+
+    test_data['day_year'] = 0
+    start_date = test_data['Date'].min()
+
+    for index, row in test_data.iterrows():
+
+        curr_date = row['Date']
+        day_number = (curr_date - start_date).days
+
+        test_data.at[index, 'day_year'] = day_number
+
+    predicted_train_df = train_data
+    predicted_test_df = test_data
+    predicted_train_df['Predicted'] = train_prediction_df
+    predicted_test_df['Predicted'] = test_prediction_df
 
     train_data = train_data.groupby('day_year')['Demand'].sum()
     test_data = test_data.groupby('day_year')['Demand'].sum()
@@ -288,7 +357,7 @@ def prediction_visualization(train_data, test_data, yhat_train, yhat_test):
 ```
 
 ```{python colab={'base_uri': 'https://localhost:8080/', 'height': 887}, id="gOyNantNRtda", outputId="dc7796cf-c196-421d-bd56-1d312334dee4"}
-prediction_visualization(train_df, test_df, yhat_train, yhat_test)
+prediction_visualization(train_df, test_df, train_prediction_df, test_prediction_df)
 ```
 
 <!-- #region id="RBsqB5hnSuPP" -->
@@ -301,21 +370,21 @@ def evaluate(metric, metric_name, true_values, predicted_values):
 ```
 
 ```{python id="v4-GWghuSbnA"}
-def evaluation(model_name, train_data, test_data, yhat_train, yhat_test):
+def evaluation(model_name, train_data, test_data, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
 
 
-    evaluate(mean_absolute_error, 'MAE', train_data['Demand'], yhat_train)
-    evaluate(mean_squared_error, 'MSE', train_data['Demand'], yhat_train)
+    evaluate(mean_absolute_error, 'MAE', train_data['Demand'], train_prediction_df)
+    evaluate(mean_squared_error, 'MSE', train_data['Demand'], train_prediction_df)
 
     print(f'{model_name} test scores:')
 
 
-    evaluate(mean_absolute_error, 'MAE', test_data['Demand'], yhat_test)
-    evaluate(mean_squared_error, 'MSE', test_data['Demand'], yhat_test)
+    evaluate(mean_absolute_error, 'MAE', test_data['Demand'], test_prediction_df)
+    evaluate(mean_squared_error, 'MSE', test_data['Demand'], test_prediction_df)
 
 ```
 
 ```{python colab={'base_uri': 'https://localhost:8080/'}, id="vUBqNgIwSwKe", outputId="c05d64b8-b525-458d-96db-757e94a57d89"}
-evaluation('Ridge Regression', train_df, test_df, yhat_train, yhat_test)
+evaluation('Ridge Regression', train_df, test_df, train_prediction_df, test_prediction_df)
 ```
