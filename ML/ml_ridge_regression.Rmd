@@ -17,12 +17,10 @@ jupyter:
 
 ```{python id="AnwSHO1L97I5"}
 import datetime
-from itertools import product
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
 ```
@@ -32,14 +30,15 @@ from sklearn.model_selection import GridSearchCV
 <!-- #endregion -->
 
 ```{python id="zIkDLK9zwGmG"}
-INPUT_PATH = 'shoofer-demand-prediction/ML/datasets/'
+INPUT_PATH = 'datasets/'
+OUTPUT_PATH = 'results/predictions.parquet'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-feature_list = ['prev_week_demand', 'prev_day_demand', 'month', 'day_month', 'day_week']
+FEATURE_LIST = ['Previous_week_demand', 'Previous_day_demand', 'Day_of_month', 'Day_of_week']
 
-test_size_ratio = 0.25
+TEST_START_DATE = '2023-04-1'
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -122,17 +121,17 @@ labeled_df.head()
 <!-- #endregion -->
 
 ```{python id="ifvk6uWS6hnT"}
-def add_features(data):
-    data['prev_day_demand'] = data.groupby(['Location'])['Demand'].shift(1)
-    data['prev_week_demand'] = data.groupby(['Location'])['Demand'].shift(7)
-
-    data = data.dropna()
-
-    return data
+def feature_engineering(dataset):
+    dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
+    dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
+    dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
+    dataset['Day_of_month'] = dataset['Date'].dt.day
+    return dataset
 ```
 
 ```{python id="12zNfv8YwGmK"}
-features_df = add_features(labeled_df)
+features_df = feature_engineering(labeled_df)
+features_df = features_df.dropna()
 ```
 
 ```{python id="bJxWEkiD3VOZ"}
@@ -140,46 +139,21 @@ print(f'features dataframe shape : {features_df.shape}')
 features_df.head()
 ```
 
-<!-- #region id="7gXEv3Lm0ro0" -->
-## Extract Calendar features
-<!-- #endregion -->
-
-```{python id="ZXCqsW6swGmI"}
-def add_calendar_features(data):
-    data['month'] = data['Date'].dt.month
-    data['day_month'] = data['Date'].dt.day
-    data['day_week'] = data['Date'].dt.dayofweek
-
-    return data
-```
-
-```{python id="8pGrqumFwGmK"}
-date_features_df = add_calendar_features(features_df)
-```
-
-```{python id="nh6jS7qG3MiV"}
-print(f'date_features dataframe shape : {date_features_df.shape}')
-date_features_df.head()
-```
-
 <!-- #region id="zN0kp6jw03DP" -->
 ## Split Train and Test Data
 <!-- #endregion -->
 
 ```{python id="CMY1G1lmwGmI"}
-def train_test_splitting(dataset, test_size):
-    start_date = dataset['Date'].min()
-    end_date = dataset['Date'].max()
-    all_days = end_date - start_date
+def train_test_splitting(dataset, TEST_START_DATE):
 
-    train_df = dataset[(dataset['Date'] - start_date) < (1 - test_size) * all_days]
-    test_df = dataset[(dataset['Date'] - start_date) >= (1 - test_size) * all_days]
+    train_df = dataset[dataset['Date'] < TEST_START_DATE]
+    test_df = dataset[dataset['Date'] >= TEST_START_DATE]
 
     return train_df, test_df
 ```
 
 ```{python id="3xH4VMGNwGmK"}
-train_df, test_df = train_test_splitting(date_features_df, test_size_ratio)
+train_df, test_df = train_test_splitting(features_df, TEST_START_DATE)
 ```
 
 ```{python id="xxGdRZfqwGmL", outputId="58609337-c472-48f5-c7fc-e9d7c17aba4f"}
@@ -205,7 +179,7 @@ test_df.head()
 <!-- #endregion -->
 
 ```{python id="sOMPo5ryBm8g"}
-def grid_search(model, test_parameters, train_data, cv = None, feature_list = feature_list):
+def grid_search(model, test_parameters, train_data, cv = None, feature_list = FEATURE_LIST):
     gs = GridSearchCV(
         estimator = model, 
         param_grid = test_parameters, 
@@ -218,66 +192,14 @@ def grid_search(model, test_parameters, train_data, cv = None, feature_list = fe
     return gs.best_params_, gs.best_score_
 ```
 
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="KlE1fodhQZ-x", outputId="78b6789c-03f9-4639-e94c-57bfac1c04dd"}
-model = Ridge()
-best_params, best_score = grid_search(
-    model, 
-    {'alpha':[1, 10, 100, 1000, 10000]},
-    train_df, 
-    cv = 5, 
-    feature_list = feature_list
-    )
-
-print(best_params, best_score)
-```
-
 ```{python}
 model = Ridge()
 best_params, best_score = grid_search(
     model, 
-    {'alpha':[20000, 40000, 60000, 80000]},
+    {'alpha':[1e8]},
     train_df, 
     cv = 5, 
-    feature_list = feature_list
-    )
-
-print(best_params, best_score)
-```
-
-```{python}
-model = Ridge()
-best_params, best_score = grid_search(
-    model, 
-    {'alpha':[1e5, 1.2e5, 1.4e5, 1.6e5]},
-    train_df, 
-    cv = 5, 
-    feature_list = feature_list
-    )
-
-print(best_params, best_score)
-```
-
-```{python}
-model = Ridge()
-best_params, best_score = grid_search(
-    model, 
-    {'alpha':[110000, 115000, 120000, 125000, 130000]},
-    train_df, 
-    cv = 5, 
-    feature_list = feature_list
-    )
-
-print(best_params, best_score)
-```
-
-```{python}
-model = Ridge()
-best_params, best_score = grid_search(
-    model, 
-    {'alpha':[124000, 125000, 126000]},
-    train_df, 
-    cv = 5, 
-    feature_list = feature_list
+    feature_list = FEATURE_LIST
     )
 
 print(best_params, best_score)
@@ -301,7 +223,7 @@ def model_predict(model, train_data, test_data, feature_list):
 
 ```{python id="MulwYZc7LK7v"}
 model = Ridge(**best_params)
-train_prediction_df , test_prediction_df  = model_predict(model, train_df, test_df, feature_list)
+train_prediction_df , test_prediction_df  = model_predict(model, train_df, test_df, FEATURE_LIST)
 ```
 
 <!-- #region id="jJYHtg2oRqvS" -->
@@ -373,15 +295,28 @@ def evaluation(model_name, train_data, test_data, train_prediction_df, test_pred
 
     evaluate(mean_absolute_error, 'MAE', train_data['Demand'], train_prediction_df)
     evaluate(mean_squared_error, 'MSE', train_data['Demand'], train_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', train_data['Demand'], train_prediction_df)
 
     print(f'{model_name} test scores:')
 
-
     evaluate(mean_absolute_error, 'MAE', test_data['Demand'], test_prediction_df)
     evaluate(mean_squared_error, 'MSE', test_data['Demand'], test_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', test_data['Demand'], test_prediction_df)
 
 ```
 
 ```{python colab={'base_uri': 'https://localhost:8080/'}, id="vUBqNgIwSwKe", outputId="c05d64b8-b525-458d-96db-757e94a57d89"}
 evaluation('Ridge Regression', train_df, test_df, train_prediction_df, test_prediction_df)
+```
+
+# File Saving
+
+```{python}
+def save_predictions(dataset, path):
+    test_prediction_df = pd.DataFrame(dataset, columns = ['Demand'])
+    test_prediction_df = test_prediction_df.to_parquet(path, index=False)
+```
+
+```{python}
+save_predictions(test_prediction_df, OUTPUT_PATH)
 ```
