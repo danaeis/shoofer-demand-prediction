@@ -38,14 +38,16 @@ import shap
 <!-- #endregion -->
 
 ```{python id="zIkDLK9zwGmG"}
-INPUT_PATH = 'shoofer-demand-prediction/ML/datasets/'
+INPUT_PATH = 'datasets/'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-feature_list = ['prev_month_demand', 'prev_2week_demand', 'prev_week_demand', 'prev_day_demand', 'month', 'day_month', 'day_week']
+feature_list = ['prev_month_demand', 'prev_2week_demand', 'prev_week_demand', 'prev_day_demand', 
+                'pre_min_week_demand', 'pre_max_week_demand', 'pre_mean_week_demand', 
+                'pre_std_week_demand', 'month', 'day_month', 'day_week']
 
-test_size_ratio = 0.5
+test_size_ratio = 0.25
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -135,6 +137,13 @@ def add_features(data):  # run after merging datasets and modifing date
     data['prev_2week_demand'] = data.groupby(['Location'])['Demand'].shift(14)
     data['prev_month_demand'] = data.groupby(['Location'])['Demand'].shift(28)
 
+    # Summary features
+    window = data['Demand'].rolling(window = 7)
+    data['pre_min_week_demand'] = window.min()
+    data['pre_mean_week_demand'] = window.mean()
+    data['pre_max_week_demand'] = window.max()
+    data['pre_std_week_demand'] = window.std()
+    
     data = data.dropna()
 
     return data
