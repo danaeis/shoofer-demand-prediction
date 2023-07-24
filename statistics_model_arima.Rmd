@@ -7,147 +7,112 @@ jupyter:
       format_version: '1.2'
       jupytext_version: 1.14.7
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
+    language: python
     name: python3
 ---
 
-<!-- #region id="SrnhG-tlR6d5" -->
-#setup
-<!-- #endregion -->
-
 <!-- #region id="KzcJPH0e1BE6" -->
-##import
+# imports
 <!-- #endregion -->
-
-```{python id="q2f2DBgPzKGc", colab={'base_uri': 'https://localhost:8080/'}, outputId="f6ed56ae-b8a3-462a-b1fa-d8e8f9b423d8"}
-from google.colab import drive, files
-drive.mount('/content/drive')
-```
 
 ```{python colab={'base_uri': 'https://localhost:8080/'}, id="kEr9J20VzxOq", outputId="b88a69f2-0a15-4bfc-a660-a7a3bf9ad751"}
-# !pip install pmdarima
 import pandas as pd
 import numpy as np
-from statsmodels.tsa.stattools import adfuller
+import datetime
 import matplotlib.pyplot as plt
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-from pmdarima.arima.utils import ndiffs
-from pmdarima.arima import stationarity
 import pmdarima as pm
 from pmdarima.arima import ARIMA
 from math import sqrt
 from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
-from sklearn.model_selection import train_test_split
 ```
 
 <!-- #region id="uEOhGFuj2J3p" -->
-##function declaration
+# loading Dataset
 <!-- #endregion -->
 
+```{python}
+INPUT_PATH = 'data/labels.parquet'
+OUTPUT_PATH = 'data/labels.parquet'
+```
+
 ```{python id="xLg8mI4Yr8Zc"}
-def import_data ():
-  df1 = pd.read_parquet('/content/drive/MyDrive/demand_prj/data/yellow_tripdata_2023-01.parquet', engine='pyarrow')
-  df2 = pd.read_parquet('/content/drive/MyDrive/demand_prj/data/yellow_tripdata_2023-02.parquet', engine='pyarrow')
-  df3 = pd.read_parquet('/content/drive/MyDrive/demand_prj/data/yellow_tripdata_2023-03.parquet', engine='pyarrow')
-  df4 = pd.read_parquet('/content/drive/MyDrive/demand_prj/data/yellow_tripdata_2023-04.parquet', engine='pyarrow')
-  return (df1, df2, df3, df4)
+def load_data(path):
+    dataset = pd.read_parquet(path, engine = 'pyarrow') 
+    return dataset
 ```
 
-```{python id="WLdVMu1w_vGH"}
-def drop_time (df1, df2, df3, df4):
-  df1['tpep_pickup_datetime'] = pd.to_datetime(df1['tpep_pickup_datetime']).dt.normalize()
-  df2['tpep_pickup_datetime'] = pd.to_datetime(df2['tpep_pickup_datetime']).dt.normalize()
-  df3['tpep_pickup_datetime'] = pd.to_datetime(df3['tpep_pickup_datetime']).dt.normalize()
-  df4['tpep_pickup_datetime'] = pd.to_datetime(df4['tpep_pickup_datetime']).dt.normalize()
-  return (df1, df2, df3, df4)
+```{python}
+rides_df = load_data(INPUT_PATH)
 ```
 
-```{python id="xZT71cxd_Bsf"}
-def date_filtered (df1, df2, df3, df4):
-  df1_filtered = df1.loc[((df1['tpep_pickup_datetime'] >= '2023-01-01') & (df1['tpep_pickup_datetime'] <= '2023-01-31'))]
-  df2_filtered = df2.loc[((df2['tpep_pickup_datetime'] >= '2023-02-01') & (df2['tpep_pickup_datetime'] <= '2023-02-28'))]
-  df3_filtered = df3.loc[((df3['tpep_pickup_datetime'] >= '2023-03-01') & (df3['tpep_pickup_datetime'] <= '2023-03-31'))]
-  df4_filtered = df4.loc[((df4['tpep_pickup_datetime'] >= '2023-04-01') & (df4['tpep_pickup_datetime'] <= '2023-04-30'))]
-  return (df1_filtered, df2_filtered, df3_filtered, df4_filtered)
+# Preprocessing 
+
+```{python}
+def preprocessing(rides_df):
+    loc_ts={}
+    demand=[]
+    pre_Location=1
+    
+    for i in range(len(rides_df)):
+        
+      if rides_df.Location[i]!=pre_Location:
+        loc_ts[f'LocationID_{pre_Location}']=demand
+        demand=[]
+          
+      demand.append(rides_df.Demand[i])
+      pre_Location = rides_df.Location[i]
+        
+    loc_ts[f'LocationID_{pre_Location}'] = demand
+    loc_labels_df = pd.DataFrame(loc_ts)
+    
+    return loc_labels_df
 ```
 
-```{python id="p9XDM20a-PcX"}
-def select_features (df1_filtered, df2_filtered, df3_filtered, df4_filtered):
-  ndf1 = df1_filtered[['tpep_pickup_datetime','PULocationID']]
-  ndf2 = df2_filtered[['tpep_pickup_datetime','PULocationID']]
-  ndf3 = df3_filtered[['tpep_pickup_datetime','PULocationID']]
-  ndf4 = df4_filtered[['tpep_pickup_datetime','PULocationID']]
-  return (ndf1, ndf2, ndf3, ndf4)
+```{python}
+loc_labels_df = preprocessing(rides_df)
+print(f'loc_labels_df shape : {loc_labels_df.shape}')
+loc_labels_df
 ```
 
-```{python id="pl1aGQlR40qF"}
-def one_hot_encoding_PULocationID (ndf1, ndf2, ndf3, ndf4):
-  ndf1_onh = pd.get_dummies(ndf1,columns = ['PULocationID'])
-  ndf2_onh = pd.get_dummies(ndf2,columns = ['PULocationID'])
-  ndf3_onh = pd.get_dummies(ndf3,columns = ['PULocationID'])
-  ndf4_onh = pd.get_dummies(ndf4,columns = ['PULocationID'])
-  return (ndf1_onh, ndf2_onh, ndf3_onh, ndf4_onh)
+<!-- #region id="7fgxL33c7yRz" -->
+# ARIMA MODEL
+<!-- #endregion -->
+
+<!-- #region id="Ty2gmgJ3Yuig" -->
+## train config 
+<!-- #endregion -->
+
+```{python id="HafiobWpYqiK"}
+col = loc_labels_df.columns
+test_size_ratio = 0.3
 ```
 
-```{python id="zcpNe49a7WnQ"}
-def groupby_day_of_month (ndf1_onh, ndf2_onh, ndf3_onh, ndf4_onh):
-  daily_df1 = ndf1_onh.groupby(ndf1_onh['tpep_pickup_datetime'].dt.day)[ndf1_onh.columns[1:]].sum()
-  daily_df2 = ndf2_onh.groupby(ndf2_onh['tpep_pickup_datetime'].dt.day)[ndf2_onh.columns[1:]].sum()
-  daily_df3 = ndf3_onh.groupby(ndf3_onh['tpep_pickup_datetime'].dt.day)[ndf3_onh.columns[1:]].sum()
-  daily_df4 = ndf4_onh.groupby(ndf4_onh['tpep_pickup_datetime'].dt.day)[ndf4_onh.columns[1:]].sum()
-  return (daily_df1, daily_df2, daily_df3, daily_df4)
-```
-
-```{python id="7vmdKFlK87YI"}
-def concat_data (daily_df1, daily_df2, daily_df3, daily_df4):
-  data_dayloc = pd.concat([daily_df1, daily_df2, daily_df3, daily_df4], ignore_index = True, sort = False)
-  data_dayloc[data_dayloc.isna()] = 0
-  return data_dayloc
-```
-
-```{python id="vQs0BD7_SV7a"}
-def eval_stationary (data_dayloc):
-  stationary_result = []
-  col = data_dayloc.columns
-  st_dic = {}
-  for l in col:
-    X = data_dayloc.loc[:,l].values
-    stationary_result = adfuller(X)
-    if stationary_result[0] < stationary_result[4].get('5%'):
-      st_dic[l] = 1
-    else:
-      st_dic[l] = 0
-
-  print('being stationary(1) or not(0): \n', st_dic)
-```
-
-```{python id="Mve7Qc_nTyVh"}
-def eval_stationary_3test (data_dayloc):
-  stationary_result = []
-  col = data_dayloc.columns
-  st_dic = {}
-  for l in col:
-    diff_adf = ndiffs(data_dayloc.loc[:,l], test='adf')
-    diff_kpss = ndiffs(data_dayloc.loc[:,l], test='kpss')
-    diff_pp = ndiffs(data_dayloc.loc[:,l], test='pp')
-    print( f'\n\n{l} \ndiff suggest by ADF: {diff_adf} \ndiff suggest by kpss: {diff_kpss} \ndiff suggest by pp: {diff_pp}' )
-```
+## Split Dataset
 
 ```{python id="QWWSsvJwVWaR"}
-def split_data (data_dayloc, location, size_tr):
-  size = int(len(data_dayloc) * size_tr)
-  val_tr = data_dayloc.loc[0:size, location]
-  val_te = data_dayloc.loc[size:, location]
+def split_data(loc_labels_df, location, test_size_ratio):
+  size = int(len(loc_labels_df) * test_size_ratio)
+  val_tr = loc_labels_df.loc[0:size, location]
+  val_te = loc_labels_df.loc[size:, location]
   return (val_tr, val_te)
 ```
 
+```{python}
+val_tr, val_te = split_data(loc_labels_df, location, test_size_ratio)
+```
+
+<!-- #region id="0RW4Og3V5gsy" -->
+## online train
+<!-- #endregion -->
+
 ```{python id="jbk1N0pkxIPy"}
-def arima_forecast (val_tr, val_te):
+def arima_forecast(val_tr, val_te):
   history = [x for x in val_tr]
   predictions = []
   model = pm.arima.auto_arima(
                               history, start_p=1, start_q=1,
-                              test='kpss', max_p=5, max_q=5,
+                              test='kpss', max_p=8, max_q=8,
                               seasonal=False, m=1,
                               d=None, start_P=0,
                               suppress_warnings=True, trace=True)
@@ -165,226 +130,101 @@ def arima_forecast (val_tr, val_te):
 
 ```
 
+<!-- #region id="SllaVhLm3UCg" -->
+train and predict for all locationIDs
+
+<!-- #endregion -->
+
+```{python colab={'base_uri': 'https://localhost:8080/'}, id="qMqwNRrNH6YE", outputId="382f9add-f885-4cef-a464-8f7aef0c34d8"}
+def predict_all_location(loc_labels_df, col, test_size_ratio):
+    all_loc_rmse = []
+    all_loc_mape = []
+    val_predicted = {}
+    val_test = {}
+    val_fit = {}
+    for loc in col:
+        print('\n\nlocation: %s' %(loc))
+        val_tr, val_te = split_data (loc_labels_df, loc, test_size_ratio)
+        result = arima_forecast(val_tr, val_te)
+        val_rmse = rmse (result[0], result[1])
+        val_mape = mape (result[0], result[1])
+        all_loc_rmse.append(val_rmse)
+        all_loc_mape.append(val_mape)
+        val_test[loc] = result[0]
+        val_predicted[loc] = result[1]
+        val_test[loc] = result[0]
+        val_predicted[loc] = result[1]
+        val_fit[loc] = result[3]
+    
+    val_test = pd.DataFrame(val_test)
+    val_fit = pd.DataFrame(val_fit)
+    val_predicted = pd.DataFrame(val_predicted)
+    return (val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape)
+```
+
+```{python}
+val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape = predict_all_location(loc_labels_df, col, test_size_ratio)
+```
+
+<!-- #region id="t9TmKfCS3Fpx" -->
+## evaluation
+<!-- #endregion -->
+
 ```{python id="SqRKbhM_rgY8"}
-def rmse (val_te, predictions):
+def rmse(val_te, predictions):
   rmse = sqrt(mean_squared_error(val_te, predictions))
   return rmse
 ```
 
 ```{python id="gD4cUUg1rlUd"}
-def mape (val_te, predictions):
+def mape(val_te, predictions):
   mape = mean_absolute_percentage_error(val_te, predictions)
   return mape
 ```
 
-<!-- #region id="0PNHoypPr4OD" -->
-##load data and preprocessing
-<!-- #endregion -->
-
-```{python id="FeYPsEnHz-gi"}
-res_import_data = import_data()
-```
-
-<!-- #region id="c1ycR01VsRwf" -->
-Clear hours-minutes-seconds from the 'tpep_pickup_datetime' column
-<!-- #endregion -->
-
-```{python id="TO1h1cxuABb_"}
-res_drop_time = drop_time (res_import_data[0], res_import_data[1], res_import_data[2], res_import_data[3])
-```
-
-<!-- #region id="yd8T2KVIsrU4" -->
-###Clear outlier data
-<!-- #endregion -->
-
-```{python id="Y8OwHriL_YWu"}
-res_date_filtered = date_filtered (res_drop_time[0], res_drop_time[1],
-                                   res_drop_time[2], res_drop_time[3])
-```
-
-<!-- #region id="41vytABE8J9P" -->
-###selecting features
-<!-- #endregion -->
-
-<!-- #region id="ZcvuogX-vnO1" -->
-Extract 2 column 'tpep_pickup_datetime','PULocationID' of dataset
-<!-- #endregion -->
-
-```{python id="ms7x_TF1-l1H"}
-res_select_features = select_features (res_date_filtered[0], res_date_filtered[1],
-                                       res_date_filtered[2], res_date_filtered[3])
-```
-
-```{python id="GtKl98EbsgQu"}
-del(res_import_data)
-del(res_date_filtered);del(res_drop_time)
-
-```
-
-<!-- #region id="FTgX9tc58VFn" -->
-###OneHotEncoding
-<!-- #endregion -->
-
-<!-- #region id="XZ6CnXBjwr5L" -->
-Apply OneHotEncoding to 'PULocationID'
-<!-- #endregion -->
-
-```{python id="yu3cB34V7Dpo"}
-res_one_hot_encoding_PULocationID = one_hot_encoding_PULocationID (res_select_features[0], res_select_features[1],
-                                                                   res_select_features[2], res_select_features[3])
-```
-
-```{python id="aOurDnKNQjKs"}
-del(res_select_features)
-```
-
-```{python id="6HfYtxEY8j7A"}
-res_groupby_day_of_month = groupby_day_of_month (res_one_hot_encoding_PULocationID[0], res_one_hot_encoding_PULocationID[1],
-                                                 res_one_hot_encoding_PULocationID[2], res_one_hot_encoding_PULocationID[3])
-```
-
-```{python id="3Tz2hv17QcrU"}
-del(res_one_hot_encoding_PULocationID)
-```
-
-<!-- #region id="Ik3PM8_88iuo" -->
-###Concat datasets
-<!-- #endregion -->
-
-```{python id="VwH8f0RH9VX4"}
-data_dayloc = concat_data (res_groupby_day_of_month[0], res_groupby_day_of_month[1],
-                           res_groupby_day_of_month[2], res_groupby_day_of_month[3])
-```
-
-```{python id="gGX0Y026zG8Y"}
-del(res_groupby_day_of_month)
-```
-
-<!-- #region id="datySyD7xs6C" -->
-###Stationary Tests
-
-Dickey-Fuller test was used for stationary.
-
-<!-- #endregion -->
-
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="epoiemq-d_g2", outputId="1d419b5c-5f1a-4983-e307-49eddb7cc1bf"}
-res_eval_stationary = eval_stationary (data_dayloc)
-```
-
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="WCfYc7QWX1gI", outputId="c33ff403-2a79-4076-b135-a691a42856d8"}
-res_eval_stationary_3test = eval_stationary_3test (data_dayloc)
-```
-
-<!-- #region id="7fgxL33c7yRz" -->
-#ARIMA MODEL
-<!-- #endregion -->
-
-<!-- #region id="0RW4Og3V5gsy" -->
-##online train
-<!-- #endregion -->
-
-<!-- #region id="Ty2gmgJ3Yuig" -->
-constant
-<!-- #endregion -->
-
-```{python id="HafiobWpYqiK"}
-col = data_dayloc.columns
-l = 20  #g202
-location = col[l]
-size_tr = 0.9
-all_loc_rmse = []
-all_loc_mape = []
-val_predicted = {}
-val_test = {}
-```
-
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="lSgkdrDUFJQK", outputId="8bfc525d-53c3-43c4-c0bd-26a908d01862"}
-val_tr, val_te = split_data (data_dayloc, location, size_tr)
-result = arima_forecast (val_tr, val_te)
-```
-
-<!-- #region id="t9TmKfCS3Fpx" -->
-##evaluation
-<!-- #endregion -->
-
-```{python id="DPBVZ5wSsL-w"}
-val_rmse = rmse (result[0], result[1])
-val_mape = mape (result[0], result[1])
-```
-
-```{python colab={'base_uri': 'https://localhost:8080/', 'height': 482}, id="MEhvbYQK3ADp", outputId="156cb606-6f83-4e22-ecbd-9dbb69749ea2"}
-print('locationID= %s\nTest RMSE: %.3f\nTest mape: %.3f' % (location, val_rmse, val_mape))
-plt.plot(result[0], color='blue')
-plt.plot(result[1], color='red')
-plt.legend(['Real','Forecast'])
-plt.show()
-```
-
-```{python colab={'base_uri': 'https://localhost:8080/', 'height': 430}, id="tVd-NbvdSG38", outputId="13a99200-a6df-451b-d1a7-a403cd3609d3"}
-plt.plot(result[2], color='blue')
-plt.plot(result[3], color='red')
-plt.legend(['Real','fit values'])
-plt.show()
-```
-
-<!-- #region id="SllaVhLm3UCg" -->
-calculate for each locationID
-
-<!-- #endregion -->
-
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="qMqwNRrNH6YE", outputId="382f9add-f885-4cef-a464-8f7aef0c34d8"}
-for loc in col:
-  print('\n\nlocation: %s' %(loc))
-  val_tr, val_te = split_data (data_dayloc, loc, size_tr)
-  result = arima_forecast(val_tr, val_te)
-  val_rmse = rmse (result[0], result[1])
-  val_mape = mape (result[0], result[1])
-  all_loc_rmse.append(val_rmse)
-  all_loc_mape.append(val_mape)
-  val_test[loc] = result[0]
-  val_predicted[loc] = result[1]
-
-
-val_test=pd.DataFrame(val_test)
-val_predicted=pd.DataFrame(val_predicted)
-```
-
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="YYKGwzmTvy01", outputId="ed7404cb-a5a7-4058-b547-387e6df3d680"}
-print(f'The rmse of all location= {sqrt(sum((x**2 for x in all_loc_rmse)))}\n',
-      f'The mape of all location= {sqrt(sum((x**2 for x in all_loc_mape)))}')
-```
-
 <!-- #region id="uOVSHf307_OO" -->
-plots
+### plots
 <!-- #endregion -->
 
-```{python colab={'base_uri': 'https://localhost:8080/', 'height': 698}, id="Jd3tujKw7--c", outputId="7260fac8-202d-43f8-c49d-797c24568b84"}
-plt.figure(figsize = (10,8))
-plt.subplot(2,1,1)
-plt.plot(all_loc_rmse, color = 'red')
-plt.subplot(2,1,2)
-plt.plot(all_loc_mape)
+```{python}
+def prediction_visualization(val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape, loc_labels_df):
+    
+    loc = loc_labels_df.columns
+    x = np.arange(0,len(col)+1, 5)
+    plt.figure(figsize = (28,18))
+    plt.subplot(2,1,1)
+    plt.plot(all_loc_rmse, color = 'red')
+    plt.ylabel('rmse measures',fontsize=10)
+    plt.xticks(x, col[x], rotation=45)
+    plt.subplot(2,1,2)
+    plt.plot(all_loc_mape)
+    plt.ylabel('mape measures',fontsize=10)
+    plt.xticks(x, col[x], rotation=45)
+    plt.show()
+    
+
+    num_fig = 260
+    plt.figure(figsize = (20,18))
+    for i in range(num_fig):
+        plt.subplot(26, 10, i+1)
+        plt.plot(val_test.loc[:,col[i]], color='red')
+        plt.plot(val_predicted.loc[:,col[i]], color='green')
+        plt.title('%s'%col[i])
+    plt.suptitle('predicted vs acual value',y=0.92,fontsize=20)
+    plt.show()
+
+
+    num_fig = 260
+    plt.figure(figsize = (20,18))
+    for i in range(num_fig):
+        plt.subplot(26,10,i+1)
+        plt.plot(loc_labels_df.loc[:60,col[i]], color = 'red')
+        plt.plot(val_fit.loc[:60,col[i]], color = 'green')
+        plt.title('%s'%col[i])
+    plt.suptitle('fitted vs acual value',y=0.92,fontsize=20)
+    plt.show()
 ```
 
-```{python colab={'base_uri': 'https://localhost:8080/', 'height': 1000}, id="LvuKNv48uojq", outputId="b40987ce-93e4-417d-c806-ec464724dbef"}
-num_fig = 260
-plt.figure(figsize = (20,18))
-for i in range(num_fig):
-  plt.subplot(26, 10, i+1)
-  plt.plot(val_test.loc[:,col[i]], color='red')
-  plt.plot(val_predicted.loc[:,col[i]], color='green')
-  plt.title('%s'%col[i])
-```
-
-```{python colab={'base_uri': 'https://localhost:8080/', 'height': 235}, id="pXh9xxoRTakL", outputId="95b53d21-6a37-4c48-ada5-b27088ea4cc2"}
-num_fig = 260
-plt.figure(figsize = (20,18))
-for i in range(num_fig):
-  plt.subplot(26,10,i+1)
-  plt.plot(data_dayloc.loc[60:,col[i]], color = 'red')
-  plt.title('%s'%col[i])
-```
-
-```{python id="Wx6fW4a9unZ7"}
-sqrt()
+```{python}
+prediction_visualization(val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape, loc_labels_df)
 ```
