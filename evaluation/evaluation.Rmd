@@ -12,33 +12,44 @@ jupyter:
     name: python3
 ---
 
-#Imports
+<!-- #region notebookRunGroups={"groupValue": "1"} -->
+Imports
+<!-- #endregion -->
 
 ```{python}
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import datetime
 ```
 
-#Config
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+Config
+<!-- #endregion -->
 
 ```{python}
 # Add your input path
 labeled_path = "../data/labels.parquet"
 ```
 
-#Loading Dataset
+<!-- #region notebookRunGroups={"groupValue": "1"} -->
+Loading Dataset
+<!-- #endregion -->
 
 ```{python}
 dataset = pd.read_parquet(labeled_path)
 dataset.head()
 ```
 
-#Generate temporary predicted Data
+<!-- #region notebookRunGroups={"groupValue": "1"} -->
+Evaluation
+<!-- #endregion -->
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+Generate temporary predicted Data
+<!-- #endregion -->
 
 ```{python}
-def create_sample_prediction(dataset):
+def generate_temporary_prediction(dataset):
     predicted_demand = dataset.Demand.shift(1)
     predicted_data = pd.DataFrame(dataset[['Location', 'Date']])
     predicted_data['Demand'] = predicted_demand
@@ -47,69 +58,95 @@ def create_sample_prediction(dataset):
 ```
 
 ```{python}
-predicted_data = create_sample_prediction(dataset)
+predicted_data = generate_temporary_prediction(dataset)
 predicted_data = predicted_data.dropna()
 predicted_data.head()
 ```
 
-##calculate accuracy functions
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+calculate loss functions
+<!-- #endregion -->
 
 ```{python}
 # fix_inf_val will add to numerator and denumerator to prevent having the inf value
-def calculate_accuracy_mape(actual_data, predicted_data, fix_inf_val = 1000):
-    locations = pd.DataFrame(actual_data['Location'].unique(), columns=['Location'])
-    loc_accuracies = pd.DataFrame(columns=['Location', 'accuracy_mape'])
-    # iterate over location to calculate mape for each
-    for loc_id in locations['Location']:
-        actual_demand, predicted_demand = actual_data.loc[actual_data['Location']==loc_id].Demand, predicted_data.loc[predicted_data['Location']==loc_id].Demand
-        error = (np.abs(actual_demand-predicted_demand)+fix_inf_val)/(actual_demand+fix_inf_val)
-        error *= 100
-        mape = pd.DataFrame({"Location": [loc_id], "accuracy_mape": [np.sum(error)/len(error)]})
-        loc_accuracies = pd.concat([loc_accuracies,mape])
-    return loc_accuracies
+def calculate_accuracy_mape(actual_data, predicted_data, fix_inf = 10):
+    
+    losses_df = dataset[['Location','Date']].copy()
+    losses_df['actual_demand'] = dataset.Demand
+    losses_df['predicted_demand'] = predicted_data.Demand
+    losses_df = losses_df.dropna()
+
+    fix_inf_val = np.where(losses_df['actual_demand']==0, fix_inf, losses_df['actual_demand'])
+    
+    losses_df['error'] = ((np.abs(losses_df['actual_demand']-losses_df['predicted_demand'])+fix_inf_val)/
+                          (losses_df['actual_demand']+fix_inf_val))*100
+
+    loss_per_location = losses_df.groupby('Location').agg({'error':'mean'})
+    loss_per_date = losses_df.groupby('Date').agg({'error':'mean'})
+
+    return loss_per_location, loss_per_date
 
 ```
 
 ```{python}
-accuracies = calculate_accuracy_mape(dataset, predicted_data).set_index('Location')
-print(accuracies)
-
+loss_per_location, loss_per_date = calculate_accuracy_mape(dataset, predicted_data)
+loss_per_location.head()
 ```
 
-##Plot accuracies function
+```{python}
+loss_per_date.head()
+```
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+Plot accuracies function
+<!-- #endregion -->
 
 ```{python}
-def plot_acc_per_loc(accuracies):
-    # plt.figure(figsize=(180, 6))
-    ax = accuracies.plot.bar(x='Location', y='accuracy_mape', rot=0)
-    plt.xlabel('Locations')
-    plt.ylabel('Accuracy(mape)')
-    plt.title('Model Accuracy per Location')
+def plot_acc(losses: pd.DataFrame, label):
+    ax = losses.plot.bar(rot=0)
+    plt.xlabel(str(label))
+    plt.ylabel('Loss(mape)')
+    title = 'Model Accuracy per '+ str(label)
+    plt.title(title)
     plt.legend()
     plt.show()
 
 ```
 
-##Evaluate Model function
+<!-- #region notebookRunGroups={"groupValue": "1"} -->
+Evaluate Model function
+<!-- #endregion -->
 
 ```{python}
-def evaluate_model(data, predicted_data):
-    accuracy = calculate_accuracy_mape(data, predicted_data)
-    plot_acc_per_loc(accuracy)
-    accuracy = accuracy.set_index('Location')
-    report = {
-        'best_accuracy': [accuracy['accuracy_mape'].min()],
-        'best_accuracy_location': [accuracy['accuracy_mape'].idxmin()],
-        'worst_accuracy': [accuracy['accuracy_mape'].max()],
-        'worst_accuracy_location': [accuracy['accuracy_mape'].idxmax()],
-        'mean_accuracy': [accuracy['accuracy_mape'].mean()]
-    }
-    return(pd.DataFrame(report))
+def prepare_report(loss: pd.DataFrame, plot_label):
+    min_threshhold = loss['error'].min()
+    max_threshhold = loss['error'].max()
+    mean_threshhold = loss['error'].mean()
+
+    report_dict = {
+            'best_accuracy': min_threshhold,
+            'best_accuracy_location': [loss['error'].idxmin()],
+            'worst_accuracy': max_threshhold,
+            'worst_accuracy_location': [loss['error'].idxmax()],
+            'mean_accuracy': mean_threshhold
+        }
+    
+    plot_acc(loss, plot_label)
+
+    return report_dict
+```
+
+```{python}
+def evaluate_model(dataset, predicted_data):
+    loss_per_location, loss_per_date = calculate_accuracy_mape(dataset, predicted_data)
+    date_report_df = pd.DataFrame(prepare_report(loss_per_date, 'date'))
+    loc_report_df = pd.DataFrame(prepare_report(loss_per_location, 'location'))
+    return(date_report_df, loc_report_df)
     
 ```
 
 ```{python}
-evaluate_model(dataset, predicted_data)
+date_report_df, loc_report_df = evaluate_model(dataset, predicted_data)
 ```
 
 ```{python}
