@@ -124,10 +124,11 @@ Plot accuracies function
 <!-- #endregion -->
 
 ```{python}
-def plot_acc(losses: pd.DataFrame, label, min_threshold, mean_threshold):
+def plot_acc(losses: pd.DataFrame, label, method, min_threshold, mean_threshold):
     ax = losses.plot.bar(rot=0)
     plt.xlabel(str(label))
-    plt.ylabel('Loss(mape)')
+    ylabel = 'Loss: ' + method
+    plt.ylabel(ylabel)
     title = 'Model Accuracy per '+ str(label)
     plt.legend("error")
     plt.title(title)
@@ -141,7 +142,7 @@ Evaluate Model function
 <!-- #endregion -->
 
 ```{python}
-def prepare_report(losses: pd.DataFrame, plot_label, error_limit):
+def prepare_report(losses: pd.DataFrame, plot_label, method, error_limit):
     min_threshold = losses.min()['error']
     max_threshold = losses.max()['error']
     mean_threshold = losses.mean()['error']
@@ -156,7 +157,7 @@ def prepare_report(losses: pd.DataFrame, plot_label, error_limit):
     
     if error_limit>0 :
         losses = pd.DataFrame(np.where(losses>error_limit, error_limit, losses))
-    plot_acc(losses, plot_label, min_threshold, mean_threshold)
+    plot_acc(losses, plot_label, method, min_threshold, mean_threshold)
 
     return report_dict
 ```
@@ -167,8 +168,8 @@ def evaluate_model(dataset, predicted_data, method, error_limit):
         loss_per_location, loss_per_date = calculate_loss_mape(dataset, predicted_data)
     elif method == 'rmse':
         loss_per_location, loss_per_date = calculate_loss_rmse(dataset, predicted_data)
-    date_report_df = pd.DataFrame(prepare_report(loss_per_date, 'date', error_limit))
-    loc_report_df = pd.DataFrame(prepare_report(loss_per_location, 'location', error_limit))
+    date_report_df = pd.DataFrame(prepare_report(loss_per_date, 'date', method, error_limit))
+    loc_report_df = pd.DataFrame(prepare_report(loss_per_location, 'location', method, error_limit))
     return(date_report_df, loc_report_df)
 ```
 
