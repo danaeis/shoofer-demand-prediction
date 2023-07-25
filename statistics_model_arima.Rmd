@@ -219,6 +219,20 @@ def prediction_visualization(val_test, val_predicted, val_fit, all_loc_rmse, all
 prediction_visualization(val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape, loc_labels_df)
 ```
 
+```{python}
+def minmax_error(val_predicted, val_test):
+    error = val_predicted-val_test
+    min_max_error = pd.concat([error.abs().min(axis=0),error.abs().max(axis=0)], axis=1,sort=False)
+    min_max_error.columns = ['min', 'max']
+    
+    return min_max_error
+```
+
+```{python}
+min_max_error = minmax_error(val_predicted, val_test)
+min_max_error.head()
+```
+
 # Save
 
 ```{python}
