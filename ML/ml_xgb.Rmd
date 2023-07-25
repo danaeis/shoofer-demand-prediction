@@ -305,6 +305,16 @@ def evaluate(metric, metric_name, true_values, predicted_values):
     print(f'{metric_name} : {metric(true_values, predicted_values)}')
 ```
 
+```{python}
+def smape(y_true, y_pred):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    numerator = np.abs(y_pred - y_true)
+    denominator = (np.abs(y_true) + np.abs(y_pred))
+    smape = np.mean(numerator / denominator)
+    return smape * 100
+```
+
 ```{python id="v4-GWghuSbnA"}
 def evaluation(model_name, train_data, test_data, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
@@ -313,12 +323,14 @@ def evaluation(model_name, train_data, test_data, train_prediction_df, test_pred
     evaluate(mean_absolute_error, 'MAE', train_data['Demand'], train_prediction_df)
     evaluate(mean_squared_error, 'MSE', train_data['Demand'], train_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', train_data['Demand'], train_prediction_df)
+    evaluate(smape, 'smape', train_data['Demand'], train_prediction_df)
 
     print(f'{model_name} test scores:')
 
     evaluate(mean_absolute_error, 'MAE', test_data['Demand'], test_prediction_df)
     evaluate(mean_squared_error, 'MSE', test_data['Demand'], test_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', test_data['Demand'], test_prediction_df)
+    evaluate(smape, 'smape', test_data['Demand'], test_prediction_df)
 
 ```
 
