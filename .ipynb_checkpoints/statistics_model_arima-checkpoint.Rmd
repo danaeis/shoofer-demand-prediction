@@ -85,21 +85,21 @@ loc_labels_df
 
 ```{python id="HafiobWpYqiK"}
 col = loc_labels_df.columns
-test_size_ratio = 0.3
+train_size_ratio = 0.7
 ```
 
 ## Split Dataset
 
 ```{python id="QWWSsvJwVWaR"}
-def split_data(loc_labels_df, location, test_size_ratio):
-  size = int(len(loc_labels_df) * test_size_ratio)
+def split_data(loc_labels_df, location, train_size_ratio):
+  size = int(len(loc_labels_df) * train_size_ratio)
   val_tr = loc_labels_df.loc[0:size, location]
   val_te = loc_labels_df.loc[size:, location]
   return (val_tr, val_te)
 ```
 
 ```{python}
-val_tr, val_te = split_data(loc_labels_df, location, test_size_ratio)
+val_tr, val_te = split_data(loc_labels_df, location, train_size_ratio)
 ```
 
 <!-- #region id="0RW4Og3V5gsy" -->
@@ -136,7 +136,7 @@ train and predict for all locationIDs
 <!-- #endregion -->
 
 ```{python colab={'base_uri': 'https://localhost:8080/'}, id="qMqwNRrNH6YE", outputId="382f9add-f885-4cef-a464-8f7aef0c34d8"}
-def predict_all_location(loc_labels_df, col, test_size_ratio):
+def predict_all_location(loc_labels_df, col, train_size_ratio):
     all_loc_rmse = []
     all_loc_mape = []
     val_predicted = {}
@@ -144,7 +144,7 @@ def predict_all_location(loc_labels_df, col, test_size_ratio):
     val_fit = {}
     for loc in col:
         print('\n\nlocation: %s' %(loc))
-        val_tr, val_te = split_data (loc_labels_df, loc, test_size_ratio)
+        val_tr, val_te = split_data (loc_labels_df, loc, train_size_ratio)
         result = arima_forecast(val_tr, val_te)
         val_rmse = rmse (result[0], result[1])
         val_mape = mape (result[0], result[1])
@@ -163,7 +163,7 @@ def predict_all_location(loc_labels_df, col, test_size_ratio):
 ```
 
 ```{python}
-val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape = predict_all_location(loc_labels_df, col, test_size_ratio)
+val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape = predict_all_location(loc_labels_df, col, train_size_ratio)
 ```
 
 <!-- #region id="t9TmKfCS3Fpx" -->
