@@ -78,27 +78,23 @@ def calculate_loss_mape(actual_data, predicted_data, fix_inf = 1):
     losses_df['error'] = ((np.abs(losses_df['actual_demand']-losses_df['predicted_demand']))/
                           (losses_df['actual_demand']+fix_inf_val))*100
 
-    loss_per_location = losses_df.groupby('Location').agg({'error':'mean'})
-    loss_per_date = losses_df.groupby('Date').agg({'error':'mean'})
+    loss_per_location = (losses_df.groupby('Location')
+                                        .agg({'actual_demand':'mean', 
+                                            'predicted_demand':'mean', 
+                                            'error':'mean'}))
+    loss_per_date = (losses_df.groupby('Date')
+                                    .agg({'actual_demand':'mean', 
+                                        'predicted_demand':'mean', 
+                                        'error':'mean'}))
 
     losses_df['day_of_week'] = losses_df['Date'].dt.dayofweek
-    loss_per_dayofweek = np.sqrt(losses_df.groupby('day_of_week').agg({'error':'mean'}))
+    loss_per_dayofweek = (losses_df.groupby('day_of_week')
+                                        .agg({'actual_demand':'mean', 
+                                            'predicted_demand':'mean', 
+                                            'error':'mean'}))
 
     return loss_per_location, loss_per_date, loss_per_dayofweek
 
-```
-
-```{python}
-loss_per_location, loss_per_date, loss_per_dayofweek = calculate_loss_mape(dataset, predicted_data)
-loss_per_location.head()
-```
-
-```{python}
-loss_per_date.head()
-```
-
-```{python}
-loss_per_dayofweek.head(10)
 ```
 
 ```{python}
@@ -111,27 +107,24 @@ def calculate_loss_rmse(actual_data, predicted_data):
 
     losses_df['error'] = np.square(np.subtract(losses_df['actual_demand'],losses_df['predicted_demand']))
 
-    loss_per_location = np.sqrt(losses_df.groupby('Location').agg({'error':'mean'}))
-    loss_per_date = np.sqrt(losses_df.groupby('Date').agg({'error':'mean'}))
+    loss_per_location = np.sqrt(losses_df.groupby('Location')
+                                .agg({'actual_demand':'mean', 
+                                      'predicted_demand':'mean', 
+                                      'error':'mean'}))
+    
+    loss_per_date = np.sqrt(losses_df.groupby('Date')
+                            .agg({'actual_demand':'mean', 
+                                'predicted_demand':'mean', 
+                                'error':'mean'}))
     
     losses_df['day_of_week'] = losses_df['Date'].dt.dayofweek
-    loss_per_dayofweek = np.sqrt(losses_df.groupby('day_of_week').agg({'error':'mean'}))
+    loss_per_dayofweek = np.sqrt(losses_df.groupby('day_of_week')
+                                 .agg({'actual_demand':'mean', 
+                                      'predicted_demand':'mean', 
+                                      'error':'mean'}))
 
     return loss_per_location, loss_per_date, loss_per_dayofweek
 
-```
-
-```{python}
-rmse_loss_per_location, rmse_loss_per_date, loss_per_dayofweek = calculate_loss_rmse(dataset, predicted_data)
-rmse_loss_per_location.head()
-```
-
-```{python}
-loss_per_dayofweek.head(10)
-```
-
-```{python}
-rmse_loss_per_date.head()
 ```
 
 <!-- #region notebookRunGroups={"groupValue": "2"} -->
@@ -139,17 +132,36 @@ Plot accuracies function
 <!-- #endregion -->
 
 ```{python}
+# %matplotlib inline
 def plot_acc(losses: pd.DataFrame, label, method, min_threshold, mean_threshold):
-    ax = losses.plot.bar(rot=0)
+    error_df = losses.reset_index()
+    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(16,5))
+
+    ind_name = error_df.columns[0]
+    
+    plot_error_df = error_df[[ind_name,'error']].copy()
+    plot_demand_df = error_df[[ind_name,'predicted_demand']].copy()
+
+    min_threshold_line_df = pd.DataFrame(min_threshold,
+                                          index=plot_error_df[ind_name], 
+                                          columns=['min_error']).reset_index()
+    mean_threshold_line_df = pd.DataFrame(mean_threshold, 
+                                          index=plot_error_df[ind_name], 
+                                          columns=['mean_error']).reset_index()
+    
+    plot_error_df.plot(x=ind_name, y='error', ax=axes, color='red', kind='line')
+    min_threshold_line_df.plot(x=ind_name, y='min_error', ax=axes, color='yellow', kind='line')
+    mean_threshold_line_df.plot(x=ind_name, y='mean_error', ax=axes, color='blue', kind='line')
+    
+    if method == 'rmse':
+        plot_demand_df.plot(x=ind_name, y='predicted_demand', ax=axes, color='green', kind='line')
+    
+    plt.legend(['error','min_error','mean_error','predicted_demand'])
     plt.xlabel(str(label))
-    ylabel = 'Loss: ' + method
-    plt.ylabel(ylabel)
-    title = 'Model Accuracy per '+ str(label)
-    plt.legend("error")
+    title = 'Model Error per ' + str(label) + ' using method ' + str(method)
     plt.title(title)
 
     plt.show()
-
 ```
 
 <!-- #region notebookRunGroups={"groupValue": "1"} -->
@@ -171,7 +183,8 @@ def prepare_report(losses: pd.DataFrame, plot_label, method, error_limit):
         }
     
     if error_limit>0 :
-        losses = pd.DataFrame(np.where(losses>error_limit, error_limit, losses))
+        losses['error'] = (np.where(losses['error']>error_limit, error_limit, losses['error']))
+    
     plot_acc(losses, plot_label, method, min_threshold, mean_threshold)
 
     return report_dict
@@ -189,11 +202,12 @@ def evaluate_model(dataset, predicted_data, method, error_limit):
     date_report_df = pd.DataFrame(prepare_report(loss_per_date, 'date', method, error_limit))
     loc_report_df = pd.DataFrame(prepare_report(loss_per_location, 'location', method, error_limit))
     dayofweek_report_df = pd.DataFrame(prepare_report(loss_per_dayofweek, 'day of the week', method, error_limit))
+    
     return(date_report_df, loc_report_df, dayofweek_report_df)
 ```
 
 ```{python}
-date_report_df, loc_report_df, dayofweek_report_df = evaluate_model(dataset, predicted_data, 'mape', 100)
+date_report_df, loc_report_df, dayofweek_report_df = evaluate_model(dataset, predicted_data, 'mape', 200)
 ```
 
 ```{python}
@@ -223,4 +237,48 @@ loc_rmse_report_df.head()
 ```{python}
 print("rmse per day of the week")
 dow_rmse_report_df.head()
+```
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+plot actual and predicted demand
+<!-- #endregion -->
+
+```{python}
+# %matplotlib inline
+def plot_actual_predicted(actual_data, predicted_data):
+    losses_df = actual_data[['Location','Date']].copy()
+    losses_df['actual_demand'] = actual_data.Demand
+    losses_df['predicted_demand'] = predicted_data.Demand
+    losses_df = losses_df.dropna()
+
+    demand_per_location_sorted = (losses_df.groupby('Location')
+                                .agg({'actual_demand':'mean', 
+                                      'predicted_demand':'mean'}))
+    
+    location_num = len(demand_per_location_sorted)
+    loc_per_plot = 10
+
+    for i in range(0, location_num, loc_per_plot):
+        plot_locations = demand_per_location_sorted[i:i+loc_per_plot].reset_index()
+        
+        plot_df = losses_df[losses_df['Location'].isin(plot_locations['Location'])] 
+        test_plot_df = plot_df.groupby(['Location'])
+        
+        fig, ax = plt.subplots(1,1,figsize=(16,5))
+        for l in plot_locations['Location']:
+            loc_plot_df = test_plot_df.get_group(l)
+            loc,_ = ax.plot(loc_plot_df['Date'],
+                    loc_plot_df[['actual_demand','predicted_demand']],
+                    label=str(l))
+            
+        title = ('actual demand and predicted demand in locations ' + 
+                    str(i) + ' to ' + str(i+loc_per_plot-1) + ' in dates')
+        plt.title(title)
+
+        plt.show()
+        
+```
+
+```{python}
+plot_actual_predicted(dataset, predicted_data)
 ```
