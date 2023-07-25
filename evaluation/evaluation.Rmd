@@ -80,17 +80,25 @@ def calculate_loss_mape(actual_data, predicted_data, fix_inf = 1):
 
     loss_per_location = losses_df.groupby('Location').agg({'error':'mean'})
     loss_per_date = losses_df.groupby('Date').agg({'error':'mean'})
-    return loss_per_location, loss_per_date
+
+    losses_df['day_of_week'] = losses_df['Date'].dt.dayofweek
+    loss_per_dayofweek = np.sqrt(losses_df.groupby('day_of_week').agg({'error':'mean'}))
+
+    return loss_per_location, loss_per_date, loss_per_dayofweek
 
 ```
 
 ```{python}
-loss_per_location, loss_per_date = calculate_loss_mape(dataset, predicted_data)
+loss_per_location, loss_per_date, loss_per_dayofweek = calculate_loss_mape(dataset, predicted_data)
 loss_per_location.head()
 ```
 
 ```{python}
 loss_per_date.head()
+```
+
+```{python}
+loss_per_dayofweek.head(10)
 ```
 
 ```{python}
@@ -105,14 +113,21 @@ def calculate_loss_rmse(actual_data, predicted_data):
 
     loss_per_location = np.sqrt(losses_df.groupby('Location').agg({'error':'mean'}))
     loss_per_date = np.sqrt(losses_df.groupby('Date').agg({'error':'mean'}))
+    
+    losses_df['day_of_week'] = losses_df['Date'].dt.dayofweek
+    loss_per_dayofweek = np.sqrt(losses_df.groupby('day_of_week').agg({'error':'mean'}))
 
-    return loss_per_location, loss_per_date
+    return loss_per_location, loss_per_date, loss_per_dayofweek
 
 ```
 
 ```{python}
-rmse_loss_per_location, rmse_loss_per_date = calculate_loss_rmse(dataset, predicted_data)
+rmse_loss_per_location, rmse_loss_per_date, loss_per_dayofweek = calculate_loss_rmse(dataset, predicted_data)
 rmse_loss_per_location.head()
+```
+
+```{python}
+loss_per_dayofweek.head(10)
 ```
 
 ```{python}
@@ -165,16 +180,20 @@ def prepare_report(losses: pd.DataFrame, plot_label, method, error_limit):
 ```{python}
 def evaluate_model(dataset, predicted_data, method, error_limit):
     if method == 'mape':
-        loss_per_location, loss_per_date = calculate_loss_mape(dataset, predicted_data)
+        loss_per_location, loss_per_date, loss_per_dayofweek = calculate_loss_mape(dataset, predicted_data)
     elif method == 'rmse':
-        loss_per_location, loss_per_date = calculate_loss_rmse(dataset, predicted_data)
+        loss_per_location, loss_per_date, loss_per_dayofweek = calculate_loss_rmse(dataset, predicted_data)
+    else:
+        return "bad method request"
+    
     date_report_df = pd.DataFrame(prepare_report(loss_per_date, 'date', method, error_limit))
     loc_report_df = pd.DataFrame(prepare_report(loss_per_location, 'location', method, error_limit))
-    return(date_report_df, loc_report_df)
+    dayofweek_report_df = pd.DataFrame(prepare_report(loss_per_dayofweek, 'day of the week', method, error_limit))
+    return(date_report_df, loc_report_df, dayofweek_report_df)
 ```
 
 ```{python}
-date_report_df, loc_report_df = evaluate_model(dataset, predicted_data, 'mape', 100)
+date_report_df, loc_report_df, dayofweek_report_df = evaluate_model(dataset, predicted_data, 'mape', 100)
 ```
 
 ```{python}
@@ -188,7 +207,7 @@ loc_report_df.head()
 ```
 
 ```{python}
-date_rmse_report_df, loc_rmse_report_df = evaluate_model(dataset, predicted_data, 'rmse', 0)
+date_rmse_report_df, loc_rmse_report_df, dow_rmse_report_df = evaluate_model(dataset, predicted_data, 'rmse', 0)
 ```
 
 ```{python}
@@ -202,5 +221,6 @@ loc_rmse_report_df.head()
 ```
 
 ```{python}
-
+print("rmse per day of the week")
+dow_rmse_report_df.head()
 ```
