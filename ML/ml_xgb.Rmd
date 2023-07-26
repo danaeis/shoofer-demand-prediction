@@ -368,7 +368,6 @@ def prediction_labeling(pred_df, labeled_df):
     labeled_prediction_df = labeled_df[['Location', 'Date']]
     labeled_prediction_df['Predicted_demand'] = pred_df
     return labeled_prediction_df
-
 ```
 
 ```{python}
