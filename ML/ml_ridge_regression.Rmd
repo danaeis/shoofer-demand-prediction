@@ -20,8 +20,8 @@ import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.linear_model import Ridge
+from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
 ```
 
@@ -313,10 +313,27 @@ evaluation('Ridge Regression', train_df, test_df, train_prediction_df, test_pred
 
 ```{python}
 def save_predictions(dataset, path):
-    test_prediction_df = pd.DataFrame(dataset, columns = ['Demand'])
-    test_prediction_df = test_prediction_df.to_parquet(path, index=False)
+    dataset.to_parquet(path, index=False)
 ```
 
 ```{python}
-save_predictions(test_prediction_df, OUTPUT_PATH)
+def prediction_labeling(pred_df, labeled_df):
+    pred_df = pd.DataFrame(pred_df, columns = ['Predicted_demand'])
+    labeled_df.reset_index(inplace = True)
+    labeled_prediction_df = labeled_df[['Location', 'Date']]
+    labeled_prediction_df['Predicted_demand'] = pred_df
+    return labeled_prediction_df
+```
+
+```{python}
+labeled_prediction_df = prediction_labeling(test_prediction_df, test_df)
+```
+
+```{python}
+print(f'labeled prediction dataframe shape : {labeled_prediction_df.shape}')
+labeled_prediction_df.head()
+```
+
+```{python}
+save_predictions(labeled_prediction_df, OUTPUT_PATH)
 ```
