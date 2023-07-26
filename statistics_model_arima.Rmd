@@ -12,15 +12,24 @@ jupyter:
     name: python3
 ---
 
+<!-- #region id="KzcJPH0e1BE6" -->
+# imports
+<!-- #endregion -->
+
 ```{python colab={'base_uri': 'https://localhost:8080/'}, id="kEr9J20VzxOq", outputId="b88a69f2-0a15-4bfc-a660-a7a3bf9ad751"}
 import pandas as pd
 import numpy as np
 import datetime
 import matplotlib.pyplot as plt
 import pmdarima as pm
+import warnings
 from pmdarima.arima import ARIMA
 from math import sqrt
 from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
+```
+
+```{python}
+warnings.filterwarnings("ignore")
 ```
 
 <!-- #region id="uEOhGFuj2J3p" -->
@@ -31,10 +40,6 @@ from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
 INPUT_PATH = 'data/labels.parquet'
 OUTPUT_PATH = 'data/arima_predict.parquet'
 ```
-
-<!-- #region id="KzcJPH0e1BE6" -->
-# imports
-<!-- #endregion -->
 
 ```{python id="xLg8mI4Yr8Zc"}
 def load_data(path):
@@ -80,15 +85,13 @@ loc_labels_df.head()
 <!-- #endregion -->
 
 <!-- #region id="Ty2gmgJ3Yuig" -->
-## train config 
+## train 
 <!-- #endregion -->
 
 ```{python id="HafiobWpYqiK"}
 col = loc_labels_df.columns
 train_size_ratio = 0.2
 ```
-
-## Split Dataset
 
 ```{python id="QWWSsvJwVWaR"}
 def split_data(loc_labels_df, location, train_size_ratio):
@@ -107,7 +110,7 @@ def arima_forecast(val_tr, val_te):
                               test='kpss', max_p=8, max_q=8,
                               seasonal=False, m=1,
                               d=None, start_P=0,
-                              suppress_warnings=True, trace=True)
+                              suppress_warnings=False, trace=False)
     for t in range(len(val_te)):
         best_arima_model_fit = pm.arima.ARIMA(order=model.get_params().get("order")).fit(history)
         output = best_arima_model_fit.predict(n_periods=1)
@@ -147,7 +150,6 @@ def predict_all_location(loc_labels_df, col, train_size_ratio):
     val_test = {}
     val_fit = {}
     for loc in col:
-        print('\n\nlocation: %s' %(loc))
         val_tr, val_te = split_data (loc_labels_df, loc, train_size_ratio)
         result = arima_forecast(val_tr, val_te)
         val_rmse = rmse (result[0], result[1])
@@ -172,53 +174,6 @@ val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape = predict_all_locat
 ## evaluation
 <!-- #endregion -->
 
-<!-- #region id="uOVSHf307_OO" -->
-### plots
-<!-- #endregion -->
-
-```{python}
-def prediction_visualization(val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape, loc_labels_df):
-    
-    loc = loc_labels_df.columns
-    x = np.arange(0,len(col)+1, 5)
-    plt.figure(figsize = (28,18))
-    plt.subplot(2,1,1)
-    plt.plot(all_loc_rmse, color = 'red')
-    plt.ylabel('rmse measures',fontsize=20)
-    plt.xticks(x, col[x], rotation=45)
-    plt.subplot(2,1,2)
-    plt.plot(all_loc_mape)
-    plt.ylabel('mape measures',fontsize=20)
-    plt.xticks(x, col[x], rotation=45)
-    plt.show()
-    
-
-    num_fig = 260
-    plt.figure(figsize = (20,18))
-    for i in range(num_fig):
-        plt.subplot(26, 10, i+1)
-        plt.plot(val_test.loc[:,col[i]], color='red')
-        plt.plot(val_predicted.loc[:,col[i]], color='green')
-        plt.title('%s'%col[i])
-    plt.suptitle('predicted vs acual value',y=0.92,fontsize=20)
-    plt.show()
-
-
-    num_fig = 260
-    plt.figure(figsize = (20,18))
-    for i in range(num_fig):
-        plt.subplot(26,10,i+1)
-        plt.plot(loc_labels_df.loc[:60,col[i]], color = 'red')
-        plt.plot(val_fit.loc[:60,col[i]], color = 'green')
-        plt.title('%s'%col[i])
-    plt.suptitle('fitted vs acual value',y=0.92,fontsize=20)
-    plt.show()
-```
-
-```{python}
-prediction_visualization(val_test, val_predicted, val_fit, all_loc_rmse, all_loc_mape, loc_labels_df)
-```
-
 ```{python}
 def minmax_error(val_predicted, val_test):
     error = val_predicted-val_test
@@ -233,7 +188,7 @@ min_max_error = minmax_error(val_predicted, val_test)
 min_max_error.head()
 ```
 
-# Save
+# Save file
 
 ```{python}
 def save_val_predicted(dataset, path):
