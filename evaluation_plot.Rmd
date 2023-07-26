@@ -67,8 +67,8 @@ def predicted_vs_actual(axs, actual_value, predicted_value, location_id, percent
     axs.set_xlim(0, plot_range)
     axs.set_ylim(0, plot_range)
     
-    axs.plot((0,plot_range),(0,plot_range), color='black', lw=0.7)
-    axs.plot((0,plot_range),(0,plot_range*(1+percent)), ls="--", color='black', lw=0.8)
+    axs.plot((0,plot_range),(0,plot_range), color='black', lw=0.7, label = '%0')
+    axs.plot((0,plot_range),(0,plot_range*(1+percent)), ls="--", color='black', lw=0.8, label = '%20')
     axs.plot((0,plot_range),(0,plot_range*(1-percent)), ls="--", color='black', lw=0.8)
 
 ```
