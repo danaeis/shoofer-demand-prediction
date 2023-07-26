@@ -94,6 +94,8 @@ len(location_ids)
 ```{python}
 num_rows = int(np.ceil(len(location_ids) / 7))
 fig, axs = plt.subplots(num_rows, 7, figsize=(num_rows * 7, num_rows * 7))
+percent = 0.2
+
 for i, ax in enumerate(axs.flat):
     try:
         ax.set_title(f'Location {location_ids[i]} with {str(percentage(test_df, prediction_df, location_ids[i], percent))} probability')
