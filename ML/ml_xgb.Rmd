@@ -21,10 +21,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import shap
-from sklearn.linear_model import Ridge
+import xgboost as xgb
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
-import xgboost as xgb
 ```
 
 <!-- #region id="pSSMa3G2wGmF" -->
@@ -316,21 +315,21 @@ def smape(y_true, y_pred):
 ```
 
 ```{python id="v4-GWghuSbnA"}
-def evaluation(model_name, train_data, test_data, train_prediction_df, test_prediction_df):
+def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
 
 
-    evaluate(mean_absolute_error, 'MAE', train_data['Demand'], train_prediction_df)
-    evaluate(mean_squared_error, 'MSE', train_data['Demand'], train_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', train_data['Demand'], train_prediction_df)
-    evaluate(smape, 'smape', train_data['Demand'], train_prediction_df)
+    evaluate(mean_absolute_error, 'MAE', train_df['Demand'], train_prediction_df)
+    evaluate(mean_squared_error, 'MSE', train_df['Demand'], train_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', train_df['Demand'], train_prediction_df)
+    evaluate(smape, 'smape', train_df['Demand'], train_prediction_df)
 
     print(f'{model_name} test scores:')
 
-    evaluate(mean_absolute_error, 'MAE', test_data['Demand'], test_prediction_df)
-    evaluate(mean_squared_error, 'MSE', test_data['Demand'], test_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', test_data['Demand'], test_prediction_df)
-    evaluate(smape, 'smape', test_data['Demand'], test_prediction_df)
+    evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
+    evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
+    evaluate(smape, 'smape', test_df['Demand'], test_prediction_df)
 
 ```
 
@@ -359,10 +358,28 @@ shap.summary_plot(shap_values, train_df[FEATURE_LIST])
 
 ```{python}
 def save_predictions(dataset, path):
-    test_prediction_df = pd.DataFrame(dataset, columns = ['Demand'])
-    test_prediction_df = test_prediction_df.to_parquet(path, index=False)
+    dataset.to_parquet(path, index=False)
 ```
 
 ```{python}
-save_predictions(test_prediction_df, OUTPUT_PATH)
+def prediction_labeling(pred_df, labeled_df):
+    pred_df = pd.DataFrame(pred_df, columns = ['Predicted_demand'])
+    labeled_df.reset_index(inplace = True)
+    labeled_prediction_df = labeled_df[['Location', 'Date']]
+    labeled_prediction_df['Predicted_demand'] = pred_df
+    return labeled_prediction_df
+
+```
+
+```{python}
+labeled_prediction_df = prediction_labeling(test_prediction_df, test_df)
+```
+
+```{python}
+print(f'labeled prediction dataframe shape : {labeled_prediction_df.shape}')
+labeled_prediction_df.head()
+```
+
+```{python}
+save_predictions(labeled_prediction_df, OUTPUT_PATH)
 ```
