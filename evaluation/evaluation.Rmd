@@ -36,6 +36,7 @@ Loading Dataset
 
 ```{python}
 dataset = pd.read_parquet(labeled_path)
+print(dataset.shape)
 dataset.head()
 ```
 
@@ -50,6 +51,7 @@ Generate temporary predicted Data
 ```{python}
 def generate_temporary_prediction(dataset):
     predicted_demand = dataset.Demand.shift(1)
+    dataset = dataset[1:]
     predicted_data = pd.DataFrame(dataset[['Location', 'Date']])
     predicted_data['Demand'] = predicted_demand
     return predicted_data
@@ -59,7 +61,14 @@ def generate_temporary_prediction(dataset):
 ```{python}
 predicted_data = generate_temporary_prediction(dataset)
 predicted_data = predicted_data.dropna()
+print(predicted_data.shape)
 predicted_data.head()
+```
+
+```{python}
+actual_data = dataset[1:]
+print(actual_data.shape)
+actual_data.head()
 ```
 
 <!-- #region notebookRunGroups={"groupValue": "2"} -->
@@ -74,9 +83,9 @@ def calculate_loss_mape(actual_data, predicted_data, fix_inf = 1):
     losses_df['predicted_demand'] = predicted_data.Demand
     losses_df = losses_df.dropna()
 
-    fix_inf_val = np.where(losses_df['actual_demand']==0, fix_inf, losses_df['actual_demand'])    
+    fix_inf_val = np.where(losses_df['actual_demand']==0, fix_inf, losses_df['actual_demand'])
     losses_df['error'] = ((np.abs(losses_df['actual_demand']-losses_df['predicted_demand']))/
-                          (losses_df['actual_demand']+fix_inf_val))*100
+                          (fix_inf_val))*100
 
     loss_per_location = (losses_df.groupby('Location')
                                         .agg({'actual_demand':'mean', 
@@ -207,7 +216,7 @@ def evaluate_model(dataset, predicted_data, method, error_limit):
 ```
 
 ```{python}
-date_report_df, loc_report_df, dayofweek_report_df = evaluate_model(dataset, predicted_data, 'mape', 200)
+date_report_df, loc_report_df, dayofweek_report_df = evaluate_model(actual_data, predicted_data, 'mape', 200)
 ```
 
 ```{python}
@@ -221,7 +230,12 @@ loc_report_df.head()
 ```
 
 ```{python}
-date_rmse_report_df, loc_rmse_report_df, dow_rmse_report_df = evaluate_model(dataset, predicted_data, 'rmse', 0)
+print("mape per day of the week")
+dayofweek_report_df.head()
+```
+
+```{python}
+date_rmse_report_df, loc_rmse_report_df, dow_rmse_report_df = evaluate_model(actual_data, predicted_data, 'rmse', 0)
 ```
 
 ```{python}
@@ -239,46 +253,118 @@ print("rmse per day of the week")
 dow_rmse_report_df.head()
 ```
 
+plot actual VS predicted
+
+```{python}
+def percentage(actual_predicted_df, location_id, percent):
+  actual = actual_predicted_df[actual_predicted_df['Location']==location_id]['actual_demand'].to_numpy()
+  pred = actual_predicted_df[actual_predicted_df['Location']==location_id]['predicted_demand'].to_numpy()
+  count = 0
+  for i in range(len(actual)):
+   if actual[i]*(1-percent)<=pred[i]<=actual[i]*(1+percent):
+      count = count + 1
+  percentage_data = count/len(actual)
+  return round(percentage_data,2)*100
+```
+
+```{python}
+def predicted_vs_actual(actual_predicted_df, location_ids, percent):
+    plt.figure(figsize=(16,5))
+
+    # error_percentage = pd.DataFrame(columns=['Location', 'precentage'])
+    for loc in location_ids:
+        error_percentage = percentage(actual_predicted_df, loc, percent)
+        label = 'location ' + str(loc) +' percentage is ' + str(error_percentage)
+        plt.scatter(actual_predicted_df[actual_predicted_df['Location']==loc]['actual_demand'], 
+                    actual_predicted_df[actual_predicted_df['Location']==loc]['predicted_demand'], 
+                    s=50, alpha=0.7,
+                    label = label)
+    
+    title = 'the percentage of prediction in ' + str(percent) + ' error range'
+    plt.title(title)
+    plt.xlabel('Actual demand', fontsize = 14)
+    plt.ylabel('Predicted demand', fontsize = 14)
+    plt.legend()
+    
+    max_demand_value = actual_predicted_df.loc[actual_predicted_df['Location']
+                                               .isin(location_ids)]['actual_demand'].max()
+    plot_range = max_demand_value + 0.3*max_demand_value
+    
+    plt.xlim(0, plot_range)
+    plt.ylim(0, plot_range)
+    
+    plt.plot((0,plot_range),(0,plot_range), color='black', lw=0.7)
+    plt.plot((0,plot_range),(0,plot_range*(1+percent)), ls="--", color='black', lw=0.8)
+    plt.plot((0,plot_range),(0,plot_range*(1-percent)), ls="--", color='black', lw=0.8)
+
+    plt.show()
+```
+
+```{python}
+def plot_actual_vs_predict_per_location(actual_predicted_df: pd.DataFrame, loc_per_plot=10, percent=0.2):
+    demand_per_location_sorted = (actual_predicted_df.groupby('Location')
+                                    .agg({'actual_demand':'mean', 
+                                        'predicted_demand':'mean'})).sort_values(
+                                                                        by='actual_demand', 
+                                                                        ascending=False)
+    
+    location_num = len(demand_per_location_sorted)
+    for i in range(0, location_num, loc_per_plot):
+        plot_locations = demand_per_location_sorted[i:i+loc_per_plot].reset_index()['Location']
+        predicted_vs_actual(actual_predicted_df, plot_locations, percent)
+
+        
+```
+
+```{python}
+percent = 0.2
+loc_per_plot = 10
+actual_predicted_df = actual_data[['Location','Date']].copy()
+actual_predicted_df['actual_demand'] = actual_data.Demand
+actual_predicted_df['predicted_demand'] = predicted_data.Demand
+plot_actual_vs_predict_per_location(actual_predicted_df, loc_per_plot, percent)
+```
+
 <!-- #region notebookRunGroups={"groupValue": "2"} -->
 plot actual and predicted demand
 <!-- #endregion -->
 
 ```{python}
 # %matplotlib inline
-def plot_actual_predicted(actual_data, predicted_data):
-    losses_df = actual_data[['Location','Date']].copy()
-    losses_df['actual_demand'] = actual_data.Demand
-    losses_df['predicted_demand'] = predicted_data.Demand
-    losses_df = losses_df.dropna()
+def plot_actual_predicted(actual_predicted_df, loc_per_plot = 10):
 
-    demand_per_location_sorted = (losses_df.groupby('Location')
+    demand_per_location = (actual_predicted_df.groupby('Location')
                                 .agg({'actual_demand':'mean', 
                                       'predicted_demand':'mean'}))
     
-    location_num = len(demand_per_location_sorted)
-    loc_per_plot = 10
-
+    location_num = len(demand_per_location)
     for i in range(0, location_num, loc_per_plot):
-        plot_locations = demand_per_location_sorted[i:i+loc_per_plot].reset_index()
         
-        plot_df = losses_df[losses_df['Location'].isin(plot_locations['Location'])] 
+        plot_locations = demand_per_location[i:i+loc_per_plot].reset_index()  
+        plot_df = actual_predicted_df[actual_predicted_df['Location'].isin(plot_locations['Location'])] 
         test_plot_df = plot_df.groupby(['Location'])
         
-        fig, ax = plt.subplots(1,1,figsize=(16,5))
+        fig, ax = plt.subplots(1,1,figsize=(16,7))
         for l in plot_locations['Location']:
+            label = ['loc:'+str(l)+' actual', 'loc:'+str(l)+' predicted']
             loc_plot_df = test_plot_df.get_group(l)
             loc,_ = ax.plot(loc_plot_df['Date'],
                     loc_plot_df[['actual_demand','predicted_demand']],
-                    label=str(l))
+                    label=label)
             
         title = ('actual demand and predicted demand in locations ' + 
                     str(i) + ' to ' + str(i+loc_per_plot-1) + ' in dates')
         plt.title(title)
-
+        plt.xlabel('Date', fontsize = 14)
+        plt.ylabel('Demand', fontsize = 14)
+        plt.legend()
         plt.show()
         
 ```
 
 ```{python}
-plot_actual_predicted(dataset, predicted_data)
+actual_predicted_df = actual_data[['Location','Date']].copy()
+actual_predicted_df['actual_demand'] = actual_data.Demand
+actual_predicted_df['predicted_demand'] = predicted_data.Demand
+plot_actual_predicted(actual_predicted_df)
 ```
