@@ -1,0 +1,6 @@
+#Data sets#
+###########
+*.parquet
+
+datasets/
+results/
