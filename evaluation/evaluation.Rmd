@@ -12,359 +12,210 @@ jupyter:
     name: python3
 ---
 
-<!-- #region notebookRunGroups={"groupValue": "1"} -->
-Imports
-<!-- #endregion -->
-
 ```{python}
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-```
 
-<!-- #region notebookRunGroups={"groupValue": "2"} -->
-Config
-<!-- #endregion -->
+```
 
 ```{python}
 labeled_path = "../data/labels.parquet"
 ```
 
-<!-- #region notebookRunGroups={"groupValue": "1"} -->
-Loading Dataset
-<!-- #endregion -->
-
 ```{python}
-dataset = pd.read_parquet(labeled_path)
-print(dataset.shape)
-dataset.head()
+labeled_df = pd.read_parquet(labeled_path)
+print(labeled_df.shape)
+labeled_df.head()
 ```
 
-<!-- #region notebookRunGroups={"groupValue": "1"} -->
-Evaluation
-<!-- #endregion -->
-
-<!-- #region notebookRunGroups={"groupValue": "2"} -->
-Generate temporary predicted Data
-<!-- #endregion -->
-
 ```{python}
-def generate_temporary_prediction(dataset):
-    predicted_demand = dataset.Demand.shift(1)
-    dataset = dataset[1:]
-    predicted_data = pd.DataFrame(dataset[['Location', 'Date']])
-    predicted_data['Demand'] = predicted_demand
-    return predicted_data
+test_df = labeled_df.loc[labeled_df['Date']>='2023-04-01']
+test_df
 
 ```
 
 ```{python}
-predicted_data = generate_temporary_prediction(dataset)
-predicted_data = predicted_data.dropna()
-print(predicted_data.shape)
-predicted_data.head()
+predicted_df = pd.read_parquet('../data/output/xgb.parquet')
+predicted_df.tail()
 ```
 
 ```{python}
-actual_data = dataset[1:]
-print(actual_data.shape)
-actual_data.head()
+actual_predicted_df = labeled_df.copy()
+actual_predicted_df['Predicted_demand'] = predicted_df['Predicted_demand']
+actual_predicted_df.isna().sum()
+actual_predicted_df = actual_predicted_df.dropna()
 ```
 
 <!-- #region notebookRunGroups={"groupValue": "2"} -->
-calculate loss functions
+Data General information
+<!-- #endregion -->
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+Finding Important Locations
 <!-- #endregion -->
 
 ```{python}
-# fix_inf_val will add to numerator and denumerator to prevent having the inf value
-def calculate_loss_mape(actual_data, predicted_data, fix_inf = 1):
-    losses_df = actual_data[['Location','Date']].copy()
-    losses_df['actual_demand'] = actual_data.Demand
-    losses_df['predicted_demand'] = predicted_data.Demand
-    losses_df = losses_df.dropna()
+def plot_cumsum_demand(labeled_df, target_demand):
+    grouped_df = labeled_df.groupby('Location')['Demand'].sum().reset_index().sort_values(by='Demand', ascending=False).reset_index()
+    cumulative_demand = (grouped_df['Demand'].cumsum() / grouped_df['Demand'].sum()).to_numpy()
 
-    fix_inf_val = np.where(losses_df['actual_demand']==0, fix_inf, losses_df['actual_demand'])
-    losses_df['error'] = ((np.abs(losses_df['actual_demand']-losses_df['predicted_demand']))/
-                          (fix_inf_val))*100
+    plt.plot(range(1,263), cumulative_demand)
+    plt.xlabel('Location numbers')
+    plt.ylabel('Cumulative Demand')
+    plt.title('Cumulative Demand by Location')
+    target_x = (cumulative_demand <= target_demand).argmin()
+    plt.axhline(y=target_demand, color='r', linestyle='--', label=f'Target Demand ({target_demand})')
+    plt.axvline(x=target_x, color='g', linestyle='--', label=f'Target Location ({target_x})')
 
-    loss_per_location = (losses_df.groupby('Location')
-                                        .agg({'actual_demand':'mean', 
-                                            'predicted_demand':'mean', 
-                                            'error':'mean'}))
-    loss_per_date = (losses_df.groupby('Date')
-                                    .agg({'actual_demand':'mean', 
-                                        'predicted_demand':'mean', 
-                                        'error':'mean'}))
-
-    losses_df['day_of_week'] = losses_df['Date'].dt.dayofweek
-    loss_per_dayofweek = (losses_df.groupby('day_of_week')
-                                        .agg({'actual_demand':'mean', 
-                                            'predicted_demand':'mean', 
-                                            'error':'mean'}))
-
-    return loss_per_location, loss_per_date, loss_per_dayofweek
-
+    plt.legend() 
+    plt.show()
+    important_locations = grouped_df.iloc[:target_x, grouped_df.columns.get_loc('Location')]
+    important_locations = important_locations.to_numpy()
+    return important_locations
 ```
 
 ```{python}
-# fix_inf_val will add to numerator and denumerator to prevent having the inf value
-def calculate_loss_rmse(actual_data, predicted_data):
-    losses_df = actual_data[['Location','Date']].copy()
-    losses_df['actual_demand'] = actual_data.Demand
-    losses_df['predicted_demand'] = predicted_data.Demand
-    losses_df = losses_df.dropna()
+important_locations = plot_cumsum_demand(labeled_df, 0.97)
+```
 
-    losses_df['error'] = np.square(np.subtract(losses_df['actual_demand'],losses_df['predicted_demand']))
+```{python}
+important_locations
+```
 
-    loss_per_location = np.sqrt(losses_df.groupby('Location')
-                                .agg({'actual_demand':'mean', 
-                                      'predicted_demand':'mean', 
-                                      'error':'mean'}))
+```{python}
+high_demand_locations_df = actual_predicted_df\
+                                    .loc[actual_predicted_df['Location'].isin(important_locations)]\
+                                        .reset_index(drop=True)
+high_demand_locations_df
+```
+
+```{python}
+low_demand_locations_df = actual_predicted_df\
+                                    .loc[~actual_predicted_df['Location'].isin(important_locations)]\
+                                        .reset_index(drop=True)
+low_demand_locations_df
+```
+
+```{python}
+def calculate_mape(actual_predicted_df:pd.DataFrame):
     
-    loss_per_date = np.sqrt(losses_df.groupby('Date')
-                            .agg({'actual_demand':'mean', 
-                                'predicted_demand':'mean', 
-                                'error':'mean'}))
-    
-    losses_df['day_of_week'] = losses_df['Date'].dt.dayofweek
-    loss_per_dayofweek = np.sqrt(losses_df.groupby('day_of_week')
-                                 .agg({'actual_demand':'mean', 
-                                      'predicted_demand':'mean', 
-                                      'error':'mean'}))
+    actual_predicted_df['error'] = (np.abs(actual_predicted_df['Demand']-
+                                            actual_predicted_df['Predicted_demand']))*100
 
-    return loss_per_location, loss_per_date, loss_per_dayofweek
+    error_per_location = (actual_predicted_df
+                                .groupby('Location')
+                                .mean())[['Demand', 'Predicted_demand', 'error']]
+    error_per_date = (actual_predicted_df
+                                .groupby('Date')
+                                .mean())[['Demand', 'Predicted_demand', 'error']]
+                     
+    actual_predicted_df['day_of_week'] = actual_predicted_df['Date'].dt.dayofweek
+    error_per_dayofweek = (actual_predicted_df
+                                .groupby('day_of_week')
+                                .mean())[['Demand', 'Predicted_demand', 'error']]
+
+    return error_per_location, error_per_date, error_per_dayofweek
 
 ```
 
 <!-- #region notebookRunGroups={"groupValue": "2"} -->
-Plot accuracies function
+plot mape
 <!-- #endregion -->
 
 ```{python}
 # %matplotlib inline
-def plot_acc(losses: pd.DataFrame, label, method, min_threshold, mean_threshold):
-    error_df = losses.reset_index()
+# def plot_mape(errors: pd.DataFrame, per, thresholds: pd.DataFrame or None = None):
+def plot_mape(errors: pd.DataFrame, per):
+    errors = errors
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(16,5))
-
-    ind_name = error_df.columns[0]
+    errors.plot(y='error', ax=axes, color='red', kind='line', marker='o')
     
-    plot_error_df = error_df[[ind_name,'error']].copy()
-    plot_demand_df = error_df[[ind_name,'predicted_demand']].copy()
-
-    min_threshold_line_df = pd.DataFrame(min_threshold,
-                                          index=plot_error_df[ind_name], 
-                                          columns=['min_error']).reset_index()
-    mean_threshold_line_df = pd.DataFrame(mean_threshold, 
-                                          index=plot_error_df[ind_name], 
-                                          columns=['mean_error']).reset_index()
-    
-    plot_error_df.plot(x=ind_name, y='error', ax=axes, color='red', kind='line')
-    min_threshold_line_df.plot(x=ind_name, y='min_error', ax=axes, color='yellow', kind='line')
-    mean_threshold_line_df.plot(x=ind_name, y='mean_error', ax=axes, color='blue', kind='line')
-    
-    if method == 'rmse':
-        plot_demand_df.plot(x=ind_name, y='predicted_demand', ax=axes, color='green', kind='line')
-    
-    plt.legend(['error','min_error','mean_error','predicted_demand'])
-    plt.xlabel(str(label))
-    title = 'Model Error per ' + str(label) + ' using method ' + str(method)
+    thresholds = pd.DataFrame({'min':[errors['error'].min()], 
+                               'mean':[errors['error'].mean()], 
+                               'max':[errors['error'].max()]})
+    for i, thre in enumerate(thresholds):
+            threshold = pd.DataFrame(index=errors.index)
+            threshold[str(thresholds.columns[i])] = [thresholds[thre][0]]*len(errors)
+            threshold.plot(ax=axes, kind='line', label=str(thre), linestyle='--')
+        
+    plt.xlabel(str(per))
+    title = 'Model Error per ' + str(per) + ' using method ' + str(per)
     plt.title(title)
 
     plt.show()
+```
+
+```{python}
+error_per_location, error_per_date, error_per_dayofweek = calculate_mape(high_demand_locations_df)
+```
+
+```{python}
+error_per_location.shape
+```
+
+```{python}
+plot_mape(error_per_location, 'Date')
+
+```
+
+```{python}
+
 ```
 
 <!-- #region notebookRunGroups={"groupValue": "1"} -->
-Evaluate Model function
+Low Demand Locations Report
 <!-- #endregion -->
 
 ```{python}
-def prepare_report(losses: pd.DataFrame, plot_label, method, error_limit):
-    min_threshold = losses.min()['error']
-    max_threshold = losses.max()['error']
-    mean_threshold = losses.mean()['error']
-
-    report_dict = {
-            'best_accuracy': min_threshold,
-            'best_accuracy_point': [losses['error'].idxmin()],
-            'worst_accuracy': max_threshold,
-            'worst_accuracy_point': [losses['error'].idxmax()],
-            'mean_accuracy': mean_threshold
-        }
-    
-    if error_limit>0 :
-        losses['error'] = (np.where(losses['error']>error_limit, error_limit, losses['error']))
-    
-    plot_acc(losses, plot_label, method, min_threshold, mean_threshold)
-
-    return report_dict
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 ```
 
 ```{python}
-def evaluate_model(dataset, predicted_data, method, error_limit):
-    if method == 'mape':
-        loss_per_location, loss_per_date, loss_per_dayofweek = calculate_loss_mape(dataset, predicted_data)
-    elif method == 'rmse':
-        loss_per_location, loss_per_date, loss_per_dayofweek = calculate_loss_rmse(dataset, predicted_data)
-    else:
-        return "bad method request"
-    
-    date_report_df = pd.DataFrame(prepare_report(loss_per_date, 'date', method, error_limit))
-    loc_report_df = pd.DataFrame(prepare_report(loss_per_location, 'location', method, error_limit))
-    dayofweek_report_df = pd.DataFrame(prepare_report(loss_per_dayofweek, 'day of the week', method, error_limit))
-    
-    return(date_report_df, loc_report_df, dayofweek_report_df)
-```
-
-```{python}
-date_report_df, loc_report_df, dayofweek_report_df = evaluate_model(actual_data, predicted_data, 'mape', 200)
-```
-
-```{python}
-print('mape per date')
-date_report_df.head()
-```
-
-```{python}
-print("mape per location")
-loc_report_df.head()
-```
-
-```{python}
-print("mape per day of the week")
-dayofweek_report_df.head()
-```
-
-```{python}
-date_rmse_report_df, loc_rmse_report_df, dow_rmse_report_df = evaluate_model(actual_data, predicted_data, 'rmse', 0)
-```
-
-```{python}
-print('rmse per date')
-date_rmse_report_df.head()
-```
-
-```{python}
-print("rmse per location")
-loc_rmse_report_df.head()
-```
-
-```{python}
-print("rmse per day of the week")
-dow_rmse_report_df.head()
-```
-
-plot actual VS predicted
-
-```{python}
-def percentage(actual_predicted_df, location_id, percent):
-  actual = actual_predicted_df[actual_predicted_df['Location']==location_id]['actual_demand'].to_numpy()
-  pred = actual_predicted_df[actual_predicted_df['Location']==location_id]['predicted_demand'].to_numpy()
-  count = 0
-  for i in range(len(actual)):
-   if actual[i]*(1-percent)<=pred[i]<=actual[i]*(1+percent):
-      count = count + 1
-  percentage_data = count/len(actual)
-  return round(percentage_data,2)*100
-```
-
-```{python}
-def predicted_vs_actual(actual_predicted_df, location_ids, percent):
-    plt.figure(figsize=(16,5))
-
-    # error_percentage = pd.DataFrame(columns=['Location', 'precentage'])
-    for loc in location_ids:
-        error_percentage = percentage(actual_predicted_df, loc, percent)
-        label = 'location ' + str(loc) +' percentage is ' + str(error_percentage)
-        plt.scatter(actual_predicted_df[actual_predicted_df['Location']==loc]['actual_demand'], 
-                    actual_predicted_df[actual_predicted_df['Location']==loc]['predicted_demand'], 
-                    s=50, alpha=0.7,
-                    label = label)
-    
-    title = 'the percentage of prediction in ' + str(percent) + ' error range'
-    plt.title(title)
-    plt.xlabel('Actual demand', fontsize = 14)
-    plt.ylabel('Predicted demand', fontsize = 14)
-    plt.legend()
-    
-    max_demand_value = actual_predicted_df.loc[actual_predicted_df['Location']
-                                               .isin(location_ids)]['actual_demand'].max()
-    plot_range = max_demand_value + 0.3*max_demand_value
-    
-    plt.xlim(0, plot_range)
-    plt.ylim(0, plot_range)
-    
-    plt.plot((0,plot_range),(0,plot_range), color='black', lw=0.7)
-    plt.plot((0,plot_range),(0,plot_range*(1+percent)), ls="--", color='black', lw=0.8)
-    plt.plot((0,plot_range),(0,plot_range*(1-percent)), ls="--", color='black', lw=0.8)
-
-    plt.show()
-```
-
-```{python}
-def plot_actual_vs_predict_per_location(actual_predicted_df: pd.DataFrame, loc_per_plot=10, percent=0.2):
-    demand_per_location_sorted = (actual_predicted_df.groupby('Location')
-                                    .agg({'actual_demand':'mean', 
-                                        'predicted_demand':'mean'})).sort_values(
-                                                                        by='actual_demand', 
-                                                                        ascending=False)
-    
-    location_num = len(demand_per_location_sorted)
-    for i in range(0, location_num, loc_per_plot):
-        plot_locations = demand_per_location_sorted[i:i+loc_per_plot].reset_index()['Location']
-        predicted_vs_actual(actual_predicted_df, plot_locations, percent)
-
-        
-```
-
-```{python}
-percent = 0.2
-loc_per_plot = 10
-actual_predicted_df = actual_data[['Location','Date']].copy()
-actual_predicted_df['actual_demand'] = actual_data.Demand
-actual_predicted_df['predicted_demand'] = predicted_data.Demand
-plot_actual_vs_predict_per_location(actual_predicted_df, loc_per_plot, percent)
-```
-
-<!-- #region notebookRunGroups={"groupValue": "2"} -->
-plot actual and predicted demand
-<!-- #endregion -->
-
-```{python}
-# %matplotlib inline
-def plot_actual_predicted(actual_predicted_df, loc_per_plot = 10):
-
-    demand_per_location = (actual_predicted_df.groupby('Location')
-                                .agg({'actual_demand':'mean', 
-                                      'predicted_demand':'mean'}))
-    
-    location_num = len(demand_per_location)
-    for i in range(0, location_num, loc_per_plot):
-        
-        plot_locations = demand_per_location[i:i+loc_per_plot].reset_index()  
-        plot_df = actual_predicted_df[actual_predicted_df['Location'].isin(plot_locations['Location'])] 
-        test_plot_df = plot_df.groupby(['Location'])
-        
-        fig, ax = plt.subplots(1,1,figsize=(16,7))
-        for l in plot_locations['Location']:
-            label = ['loc:'+str(l)+' actual', 'loc:'+str(l)+' predicted']
-            loc_plot_df = test_plot_df.get_group(l)
-            loc,_ = ax.plot(loc_plot_df['Date'],
-                    loc_plot_df[['actual_demand','predicted_demand']],
-                    label=label)
+def accuracy_per_location(actual_predicted_df: pd.DataFrame):
+    # threshold_demand = {}
+    num_loc = actual_predicted_df['Location'].unique()
+    per_rec_location = pd.DataFrame(columns=['Location','Date', 'Demand', 'Predicted_demand', 'actual_class','predict_class'])
+    for loc in num_loc:
+        loc_df = actual_predicted_df.loc[actual_predicted_df['Location']==loc]
+        loc_mean_demand = loc_df['Demand'].mean()
+        loc_df['actual_class'] = loc_df['Demand']-loc_mean_demand
+        loc_df['predict_class'] = loc_df['Predicted_demand']-loc_mean_demand
+        per_rec_location = pd.concat([per_rec_location,loc_df])
             
-        title = ('actual demand and predicted demand in locations ' + 
-                    str(i) + ' to ' + str(i+loc_per_plot-1) + ' in dates')
-        plt.title(title)
-        plt.xlabel('Date', fontsize = 14)
-        plt.ylabel('Demand', fontsize = 14)
-        plt.legend()
-        plt.show()
-        
+    y_test = np.where(per_rec_location['actual_class']>0,1,0)
+    y_pred = np.where(per_rec_location['predict_class']>0,1,0)
+    conf_matrix = confusion_matrix(y_true=y_test, y_pred=y_pred)
+    # 
+    # Print the confusion matrix using Matplotlib
+    #
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.matshow(conf_matrix, cmap=plt.cm.Oranges, alpha=0.3)
+    for i in range(conf_matrix.shape[0]):
+        for j in range(conf_matrix.shape[1]):
+            ax.text(x=j, y=i,s=conf_matrix[i, j], va='center', ha='center', size='xx-large')
+    percision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    
+    plt.xlabel('Predictions', fontsize=18)
+    plt.ylabel('Actuals', fontsize=18)
+    title = 'Confusion Matrix for low demand locations: \n Precision: '+f'{percision:.2f}'+' Recall: '+f'{recall:.2f}'
+    plt.title(title, fontsize=18)
+    plt.show()
+    
+    return per_rec_location
+    
 ```
 
 ```{python}
-actual_predicted_df = actual_data[['Location','Date']].copy()
-actual_predicted_df['actual_demand'] = actual_data.Demand
-actual_predicted_df['predicted_demand'] = predicted_data.Demand
-plot_actual_predicted(actual_predicted_df)
+acc_loc_df = accuracy_per_location(low_demand_locations_df)
+```
+
+```{python}
+acc_loc_df.head()
+```
+
+```{python}
+
 ```
