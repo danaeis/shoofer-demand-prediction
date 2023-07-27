@@ -30,12 +30,6 @@ labeled_df.head()
 ```
 
 ```{python}
-test_df = labeled_df.loc[labeled_df['Date']>='2023-04-01']
-test_df
-
-```
-
-```{python}
 predicted_df = pd.read_parquet('../data/output/xgb.parquet')
 predicted_df.tail()
 ```
@@ -124,8 +118,7 @@ plot mape
 <!-- #endregion -->
 
 ```{python}
-# %matplotlib inline
-# def plot_mape(errors: pd.DataFrame, per, thresholds: pd.DataFrame or None = None):
+
 def plot_mape(errors: pd.DataFrame, per):
     errors = errors
     fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(16,5))
