@@ -119,6 +119,31 @@ print(f'labeled dataframe shape : {labeled_df.shape}')
 labeled_df.head()
 ```
 
+```{python}
+def plot_cumsum_demand(labeled_df, target_demand):
+    grouped_df = labeled_df.groupby('Location')['Demand'].sum().reset_index().sort_values(by='Demand', ascending=False)
+    cumulative_demand = (grouped_df['Demand'].cumsum() / grouped_df['Demand'].sum()).to_numpy()
+
+    # Plot the cumulative demand for each location
+    plt.plot(range(1,263), cumulative_demand)
+    plt.xlabel('Location')
+    plt.ylabel('Cumulative Demand')
+    plt.title('Cumulative Demand by Location')
+    target_demand = 0.8
+    target_x = (cumulative_demand <= target_demand).argmin()
+    plt.axhline(y=target_demand, color='r', linestyle='--', label=f'Target Demand ({target_demand})')
+    plt.axvline(x=target_x, color='g', linestyle='--', label=f'Target Location ({target_x})')
+
+    plt.legend()  # Show the label of the horizontal line
+    plt.show()
+    important_locations = grouped_df.iloc[:target_x, grouped_df.columns.get_loc('Location')]
+    return important_locations
+```
+
+```{python}
+important_locations = plot_cumsum_demand(labeled_df, 0.8)
+```
+
 <!-- #region id="G0W2pR-70JJb" -->
 ## Add Feature
 <!-- #endregion -->
@@ -300,8 +325,11 @@ prediction_visualization(train_df, test_df, train_prediction_df, test_prediction
 <!-- #endregion -->
 
 ```{python id="BcGvcilUWEEC"}
-def evaluate(metric, metric_name, true_values, predicted_values):
-    print(f'{metric_name} : {metric(true_values, predicted_values)}')
+def evaluate(metric, metric_name, df_true, df_pred, important_locations):
+    selected_df_true = df_true[df_true['Location'].isin(important_locations)]['Demand'].to_numpy()
+    selected_df_pred = df_pred[df_pred['Location'].isin(important_locations)]['Predicted_demand'].to_numpy()
+
+    print(f'{metric_name} : {metric(selected_df_true, selected_df_pred)}')
 ```
 
 ```{python}
@@ -314,27 +342,39 @@ def smape(y_true, y_pred):
     return smape * 100
 ```
 
+```{python}
+def prediction_labeling(pred_df, labeled_df):
+    pred_df = pd.DataFrame(pred_df, columns = ['Predicted_demand'])
+    labeled_df.reset_index(inplace = True)
+    labeled_prediction_df = labeled_df[['Location', 'Date']]
+    labeled_prediction_df['Predicted_demand'] = pred_df
+    return labeled_prediction_df
+```
+
 ```{python id="v4-GWghuSbnA"}
-def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df):
+def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df, important_locations):
     print(f'{model_name} train scores:')
 
 
-    evaluate(mean_absolute_error, 'MAE', train_df['Demand'], train_prediction_df)
-    evaluate(mean_squared_error, 'MSE', train_df['Demand'], train_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', train_df['Demand'], train_prediction_df)
-    evaluate(smape, 'smape', train_df['Demand'], train_prediction_df)
+    evaluate(mean_absolute_error, 'MAE', train_df, train_prediction_df, important_locations)
+    evaluate(mean_squared_error, 'MSE', train_df, train_prediction_df, important_locations)
+    evaluate(mean_absolute_percentage_error, 'MAPE', train_df, train_prediction_df, important_locations)
 
     print(f'{model_name} test scores:')
 
-    evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
-    evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
-    evaluate(smape, 'smape', test_df['Demand'], test_prediction_df)
+    evaluate(mean_absolute_error, 'MAE', test_df, test_prediction_df, important_locations)
+    evaluate(mean_squared_error, 'MSE', test_df, test_prediction_df, important_locations)
+    evaluate(mean_absolute_percentage_error, 'MAPE', test_df, test_prediction_df, important_locations)
 
 ```
 
+```{python}
+labeled_train_prediction_df = prediction_labeling(train_prediction_df, train_df)
+labeled_test_prediction_df = prediction_labeling(test_prediction_df, test_df)
+```
+
 ```{python id="qSZwIFprTkqK", outputId="7ae94952-ec22-410a-9d26-6e05a96af6ab"}
-evaluation('XGB', train_df, test_df, train_prediction_df, test_prediction_df)
+evaluation('XGB', train_df, test_df, labeled_train_prediction_df, labeled_test_prediction_df, important_locations)
 ```
 
 <!-- #region id="_286hlGi7VWD" -->
@@ -362,23 +402,10 @@ def save_predictions(dataset, path):
 ```
 
 ```{python}
-def prediction_labeling(pred_df, labeled_df):
-    pred_df = pd.DataFrame(pred_df, columns = ['Predicted_demand'])
-    labeled_df.reset_index(inplace = True)
-    labeled_prediction_df = labeled_df[['Location', 'Date']]
-    labeled_prediction_df['Predicted_demand'] = pred_df
-    return labeled_prediction_df
+print(f'labeled prediction dataframe shape : {labeled_test_prediction_df.shape}')
+labeled_test_prediction_df.head()
 ```
 
 ```{python}
-labeled_prediction_df = prediction_labeling(test_prediction_df, test_df)
-```
-
-```{python}
-print(f'labeled prediction dataframe shape : {labeled_prediction_df.shape}')
-labeled_prediction_df.head()
-```
-
-```{python}
-save_predictions(labeled_prediction_df, OUTPUT_PATH)
+save_predictions(labeled_test_prediction_df, OUTPUT_PATH)
 ```
