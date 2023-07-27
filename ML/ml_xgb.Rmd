@@ -333,16 +333,6 @@ def evaluate(metric, metric_name, df_true, df_pred, important_locations):
 ```
 
 ```{python}
-def smape(y_true, y_pred):
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    numerator = np.abs(y_pred - y_true)
-    denominator = (np.abs(y_true) + np.abs(y_pred))
-    smape = np.mean(numerator / denominator)
-    return smape * 100
-```
-
-```{python}
 def prediction_labeling(pred_df, labeled_df):
     pred_df = pd.DataFrame(pred_df, columns = ['Predicted_demand'])
     labeled_df.reset_index(inplace = True)
