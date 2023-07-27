@@ -134,6 +134,7 @@ def feature_engineering(dataset):
 
 ```{python id="12zNfv8YwGmK"}
 features_df = feature_engineering(labeled_df)
+features_df.dropna(inplace = True)
 ```
 
 ```{python id="bJxWEkiD3VOZ"}
@@ -264,11 +265,12 @@ def plot_cumsum_demand(labeled_df, target_demand):
     plt.legend()  # Show the label of the horizontal line
     plt.show()
     important_locations = grouped_df.iloc[:target_x, grouped_df.columns.get_loc('Location')]
+    important_locations = important_locations.to_numpy()
     return important_locations
 ```
 
 ```{python}
-important_locations = plot_cumsum_demand(labeled_df, 0.97)
+important_locations = plot_cumsum_demand(labeled_df, 0.8)
 ```
 
 ```{python id="BcGvcilUWEEC"}
@@ -350,19 +352,66 @@ def prediction_visualization(train_data, test_data, train_prediction_df, test_pr
     plt.title('Train')
     plt.plot(train_data)
     plt.plot(predicted_train_df)
-    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.legend(["Train actual Value", "Predicted"], loc ="lower right")
     plt.show()
 
-    plot_length = len(test_data)
     plt.title('Test')
     plt.plot(test_data)
     plt.plot(predicted_test_df)
-    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.legend(["Test actual Value", "Predicted"], loc ="lower right")
     plt.show()
 ```
 
 ```{python}
 prediction_visualization(train_df, test_df, labeled_train_prediction_df, labeled_test_prediction_df, important_locations)
+```
+
+```{python}
+def prediction_visualization_for_location(train_df, test_df, train_prediction_df, test_prediction_df, important_locations):
+
+    train_df = add_day_of_year(train_df)
+    test_df = add_day_of_year(test_df)
+
+    fig, axes = plt.subplots(nrows=len(important_locations) // 2 + 1, ncols=2, figsize=(10,100))
+    for i, ax in enumerate(axes.flat):
+        try:
+            important_location = important_locations[i]
+        except IndexError:
+            continue
+        location_train_df = train_df[train_df['Location'] == important_location]
+        location_train_df_pred = train_prediction_df[train_prediction_df['Location'] == important_location]
+
+        location_train_df = location_train_df.groupby('day_year')['Demand'].sum()
+        location_train_df_pred = location_train_df_pred.groupby('day_year')['Predicted_demand'].sum()
+
+        ax.plot(location_train_df, label = 'Train actual')
+        ax.plot(location_train_df_pred, label = 'Train predicted')
+        ax.set_title('Location ' + str(important_locations[i]))
+        ax.legend()
+    plt.show()
+
+
+    fig, axes = plt.subplots(nrows=len(important_locations) // 2 + 1, ncols=2, figsize=(10,100))
+    for i, ax in enumerate(axes.flat):
+        try:
+            important_location = important_locations[i]
+        except IndexError:
+            continue
+        location_test_df = test_df[test_df['Location'] == important_location]
+        location_test_df_pred = test_prediction_df[test_prediction_df['Location'] == important_location]
+
+        location_test_df = location_test_df.groupby('day_year')['Demand'].sum()
+        location_test_df_pred = location_test_df_pred.groupby('day_year')['Predicted_demand'].sum()
+
+        ax.plot(location_test_df, label = 'Test actual')
+        ax.plot(location_test_df_pred, label = 'Test predicted')
+        ax.set_title('Location ' + str(important_locations[i]))
+        ax.legend()
+    plt.show()
+```
+
+```{python}
+prediction_visualization_for_location(train_df, test_df, labeled_train_prediction_df, labeled_test_prediction_df, important_locations)
 ```
 
 <!-- #region id="_286hlGi7VWD" -->
