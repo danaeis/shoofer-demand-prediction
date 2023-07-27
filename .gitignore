@@ -1,10 +1,2 @@
-<<<<<<< HEAD
 /data
 /ride_data
-=======
-#Data sets#
-###########
-*.parquet
-
-data/
->>>>>>> 81b143d6088e2712af8df32e346da845e98fd6fd
