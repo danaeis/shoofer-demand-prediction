@@ -119,31 +119,6 @@ print(f'labeled dataframe shape : {labeled_df.shape}')
 labeled_df.head()
 ```
 
-```{python}
-def plot_cumsum_demand(labeled_df, target_demand):
-    grouped_df = labeled_df.groupby('Location')['Demand'].sum().reset_index().sort_values(by='Demand', ascending=False)
-    cumulative_demand = (grouped_df['Demand'].cumsum() / grouped_df['Demand'].sum()).to_numpy()
-
-    # Plot the cumulative demand for each location
-    plt.plot(range(1,263), cumulative_demand)
-    plt.xlabel('Location')
-    plt.ylabel('Cumulative Demand')
-    plt.title('Cumulative Demand by Location')
-    target_demand = 0.8
-    target_x = (cumulative_demand <= target_demand).argmin()
-    plt.axhline(y=target_demand, color='r', linestyle='--', label=f'Target Demand ({target_demand})')
-    plt.axvline(x=target_x, color='g', linestyle='--', label=f'Target Location ({target_x})')
-
-    plt.legend()  # Show the label of the horizontal line
-    plt.show()
-    important_locations = grouped_df.iloc[:target_x, grouped_df.columns.get_loc('Location')]
-    return important_locations
-```
-
-```{python}
-important_locations = plot_cumsum_demand(labeled_df, 0.8)
-```
-
 <!-- #region id="G0W2pR-70JJb" -->
 ## Add Feature
 <!-- #endregion -->
@@ -323,6 +298,31 @@ prediction_visualization(train_df, test_df, train_prediction_df, test_prediction
 <!-- #region id="lERphf0kTist" -->
 ### Evaluation
 <!-- #endregion -->
+
+```{python}
+def plot_cumsum_demand(labeled_df, target_demand):
+    grouped_df = labeled_df.groupby('Location')['Demand'].sum().reset_index().sort_values(by='Demand', ascending=False)
+    cumulative_demand = (grouped_df['Demand'].cumsum() / grouped_df['Demand'].sum()).to_numpy()
+
+    # Plot the cumulative demand for each location
+    plt.plot(range(1,263), cumulative_demand)
+    plt.xlabel('Location')
+    plt.ylabel('Cumulative Demand')
+    plt.title('Cumulative Demand by Location')
+    target_demand = 0.8
+    target_x = (cumulative_demand <= target_demand).argmin()
+    plt.axhline(y=target_demand, color='r', linestyle='--', label=f'Target Demand ({target_demand})')
+    plt.axvline(x=target_x, color='g', linestyle='--', label=f'Target Location ({target_x})')
+
+    plt.legend()  # Show the label of the horizontal line
+    plt.show()
+    important_locations = grouped_df.iloc[:target_x, grouped_df.columns.get_loc('Location')]
+    return important_locations
+```
+
+```{python}
+important_locations = plot_cumsum_demand(labeled_df, 0.8)
+```
 
 ```{python id="BcGvcilUWEEC"}
 def evaluate(metric, metric_name, df_true, df_pred, important_locations):
