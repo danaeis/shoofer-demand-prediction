@@ -243,58 +243,6 @@ model = xgb.XGBRegressor(**best_params)
 train_prediction_df, test_prediction_df = model_predict(model, train_df, test_df, FEATURE_LIST)
 ```
 
-<!-- #region id="J0EYl9KtTfo7" -->
-### Visualization
-<!-- #endregion -->
-
-```{python}
-def add_day_of_year(data):
-    data['day_year'] = 0
-    start_date = data['Date'].min()
-
-    for index, row in data.iterrows():
-
-        curr_date = row['Date']
-        day_number = (curr_date - start_date).days
-
-        data.at[index, 'day_year'] = day_number
-    return data
-```
-
-```{python id="ao6nw8xsRvB9"}
-def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
-
-    train_data = add_day_of_year(train_data)
-    test_data = add_day_of_year(test_data)
-
-    predicted_train_df = train_data
-    predicted_test_df = test_data
-    predicted_train_df['Predicted'] = train_prediction_df
-    predicted_test_df['Predicted'] = test_prediction_df
-
-    train_data = train_data.groupby('day_year')['Demand'].sum()
-    test_data = test_data.groupby('day_year')['Demand'].sum()
-    predicted_train_df = predicted_train_df.groupby('day_year')['Predicted'].sum()
-    predicted_test_df = predicted_test_df.groupby('day_year')['Predicted'].sum()
-
-    plt.title('Train')
-    plt.plot(train_data)
-    plt.plot(predicted_train_df)
-    plt.legend(["Real Value", "Predicted"], loc ="lower right")
-    plt.show()
-
-    plot_length = len(test_data)
-    plt.title('Test')
-    plt.plot(test_data)
-    plt.plot(predicted_test_df)
-    plt.legend(["Real Value", "Predicted"], loc ="lower right")
-    plt.show()
-```
-
-```{python id="deyLWLmZThMJ", outputId="4d0094aa-099c-490f-aa82-281ee16bae01"}
-prediction_visualization(train_df, test_df, train_prediction_df, test_prediction_df)
-```
-
 <!-- #region id="lERphf0kTist" -->
 ### Evaluation
 <!-- #endregion -->
@@ -309,7 +257,6 @@ def plot_cumsum_demand(labeled_df, target_demand):
     plt.xlabel('Location')
     plt.ylabel('Cumulative Demand')
     plt.title('Cumulative Demand by Location')
-    target_demand = 0.8
     target_x = (cumulative_demand <= target_demand).argmin()
     plt.axhline(y=target_demand, color='r', linestyle='--', label=f'Target Demand ({target_demand})')
     plt.axvline(x=target_x, color='g', linestyle='--', label=f'Target Location ({target_x})')
@@ -321,7 +268,7 @@ def plot_cumsum_demand(labeled_df, target_demand):
 ```
 
 ```{python}
-important_locations = plot_cumsum_demand(labeled_df, 0.8)
+important_locations = plot_cumsum_demand(labeled_df, 0.97)
 ```
 
 ```{python id="BcGvcilUWEEC"}
@@ -367,6 +314,57 @@ labeled_test_prediction_df = prediction_labeling(test_prediction_df, test_df)
 evaluation('XGB', train_df, test_df, labeled_train_prediction_df, labeled_test_prediction_df, important_locations)
 ```
 
+### Visualization
+
+```{python}
+def add_day_of_year(data):
+    data['day_year'] = 0
+    start_date = data['Date'].min()
+
+    for index, row in data.iterrows():
+
+        curr_date = row['Date']
+        day_number = (curr_date - start_date).days
+
+        data.at[index, 'day_year'] = day_number
+    return data
+```
+
+```{python}
+def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df, important_locations):
+
+    train_data = train_data[train_data['Location'].isin(important_locations)]
+    test_data = test_data[test_data['Location'].isin(important_locations)]
+
+    train_data = add_day_of_year(train_data)
+    test_data = add_day_of_year(test_data)
+
+    predicted_train_df = add_day_of_year(train_prediction_df)
+    predicted_test_df = add_day_of_year(test_prediction_df)
+
+    train_data = train_data.groupby('day_year')['Demand'].sum()
+    test_data = test_data.groupby('day_year')['Demand'].sum()
+    predicted_train_df = predicted_train_df.groupby('day_year')['Predicted_demand'].sum()
+    predicted_test_df = predicted_test_df.groupby('day_year')['Predicted_demand'].sum()
+
+    plt.title('Train')
+    plt.plot(train_data)
+    plt.plot(predicted_train_df)
+    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.show()
+
+    plot_length = len(test_data)
+    plt.title('Test')
+    plt.plot(test_data)
+    plt.plot(predicted_test_df)
+    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.show()
+```
+
+```{python}
+prediction_visualization(train_df, test_df, labeled_train_prediction_df, labeled_test_prediction_df, important_locations)
+```
+
 <!-- #region id="_286hlGi7VWD" -->
 ### Feature Importance and SHAPE
 <!-- #endregion -->
@@ -388,14 +386,13 @@ shap.summary_plot(shap_values, train_df[FEATURE_LIST])
 
 ```{python}
 def save_predictions(dataset, path):
-    dataset.to_parquet(path, index=False)
+    output_df = dataset[['Location', 'Date', 'Predicted_demand']]
+    output_df.to_parquet(path, index=False)
+    return output_df
 ```
 
 ```{python}
-print(f'labeled prediction dataframe shape : {labeled_test_prediction_df.shape}')
-labeled_test_prediction_df.head()
-```
-
-```{python}
-save_predictions(labeled_test_prediction_df, OUTPUT_PATH)
+output_df = save_predictions(labeled_test_prediction_df, OUTPUT_PATH)
+print(f'output_df shape : {output_df.shape}')
+output_df.head()
 ```
