@@ -191,10 +191,6 @@ predicted_data_all_loc.head()
 ### plots
 
 ```{python}
-list(index_high_demand)
-```
-
-```{python}
 def plot_high_demand_error(all_loc_rmse,all_loc_mape):
     plt.rcParams['figure.figsize'] = (50, 30)
     index_high_demand = location_labels_df.sum().sort_values(ascending=False).index[:51]
