@@ -37,8 +37,8 @@ warnings.filterwarnings("ignore")
 <!-- #endregion -->
 
 ```{python}
-INPUT_PATH = 'data/labels.parquet'
-OUTPUT_PATH = 'data/arima_predict.parquet'
+INPUT_PATH = '/Users/maedeh/Desktop/demand_project/shoofer-demand-prediction/data/labels.parquet'
+OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/shoofer-demand-prediction/data/arima_predict.parquet'
 ```
 
 ```{python id="xLg8mI4Yr8Zc"}
@@ -49,6 +49,7 @@ def load_data(path):
 
 ```{python}
 rides_df = load_data(INPUT_PATH)
+rides_df.head()
 ```
 
 # Preprocessing 
@@ -121,7 +122,7 @@ def arima_forecast(train_data, test_data):
     
     test_data = test_data.reset_index()
     return (test_data.iloc[:,1], predictions,
-          history, best_arima_model_fit.fittedvalues())
+            history, best_arima_model_fit.fittedvalues())
 
 ```
 
@@ -176,10 +177,11 @@ test_data_all_loc, predicted_data_all_loc, fitted_data_all_loc, all_loc_rmse, al
 
 ```{python}
 def evaluation(test_data_all_loc, predicted_data_all_loc):
-    predicted_all_location = predicted_data_all_loc.sum(axis=1)/len(predicted_data_all_loc)
-    test_all_location = test_data_all_loc.sum(axis=1)/len(test_data_all_loc)
-    mape_error = mape(test_all_location,predicted_all_location)
-    rmse_error = rmse(test_all_location,predicted_all_location)
+    index_high_demand = location_labels_df.sum().sort_values(ascending=False).index[:51]
+    predicted_data_vec = predicted_data_all_loc[index_high_demand].to_numpy().reshape((1,-1))
+    test_data_vec = test_data_all_loc[index_high_demand].to_numpy().reshape((1,-1))
+    mape_error = mape(test_data_vec,predicted_data_vec)
+    rmse_error = rmse(test_data_vec,predicted_data_vec)
     print(f'mape: {mape_error}')
     print(f'rmse: {rmse_error}')
 ```
