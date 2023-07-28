@@ -22,7 +22,8 @@ from scipy.stats import norm
 ```
 
 ```{python}
-INPUT_PATH = 'data/labels.parquet'
+INPUT_PATH = '/Users/maedeh/Desktop/demand_project/shoofer-demand-prediction/data/labels.parquet'
+OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/shoofer-demand-prediction/data/arima_predict.parquet'
 ```
 
 ```{python}
@@ -57,18 +58,41 @@ def high_demand_index(rides_df):
 ```
 
 ```{python}
+ind_high_demand[0]
+```
+
+```{python}
 def plot_hist(rides_df):
     ind_high_demand = high_demand_index(rides_df)
-    plt.rcParams['figure.figsize'] = (50, 30)
+    plt.rcParams['figure.figsize'] = (40, 70)
     bin = 50
+    
     for i,loc in enumerate(ind_high_demand):
-        plt.subplot(10,5,i+1)
+        plt.subplot(17,3,i+1)
+        
         error = rides_df[rides_df.Location==loc]['Actual demand'] - rides_df[rides_df.Location==loc]['Predict demand']
-        sb.histplot(error, kde=True, bins=bin, label=f'Histogram and Estimated density o Location{i}')
+        sb.histplot(error, kde=True, bins=bin, label=f'Histogram and Estimated density of Location{i}', color='green')
+    
+        mu=0
+        sigma=np.std(error)    
+        x = np.linspace(np.min(error), np.max(error), 100)
+        y = norm.pdf(x, mu, sigma)
+        kde_max = np.max(sb.histplot(error, kde=True, bins=bin).get_lines()[0].get_data()[1])
+        y *= kde_max / np.max(y)
+        
+        plt.plot(x, y, 'r-', label='Normal Gaussian Distribution')
+        plt.ylabel('Count', fontsize=25)
+        plt.tick_params(axis='both', labelsize=13)
+        plt.legend(fontsize='15')
+    
     plt.tight_layout()
     plt.show()
 ```
 
 ```{python}
 plot_hist(rides_df)
+```
+
+```{python}
+
 ```
