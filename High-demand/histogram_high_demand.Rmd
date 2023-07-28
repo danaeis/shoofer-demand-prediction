@@ -58,20 +58,20 @@ def high_demand_index(rides_df):
 ```
 
 ```{python}
-ind_high_demand[0]
-```
-
-```{python}
-def plot_hist(rides_df):
+def plot_hist(rides_df, bin):
+    
     ind_high_demand = high_demand_index(rides_df)
     plt.rcParams['figure.figsize'] = (40, 70)
-    bin = 50
     
     for i,loc in enumerate(ind_high_demand):
-        plt.subplot(17,3,i+1)
         
+        plt.subplot(17,3,i+1)
+
         error = rides_df[rides_df.Location==loc]['Actual demand'] - rides_df[rides_df.Location==loc]['Predict demand']
-        sb.histplot(error, kde=True, bins=bin, label=f'Histogram and Estimated density of Location{loc}', color='green')
+        under_estimate_percentage = error[error>0].count()*100/len(error)
+        over_estimate_percentage = error[error<0].count()*100/len(error) 
+        
+        sb.histplot(error, kde=True, bins=bin, label=f'Histogram and Estimated density of Error for Location{loc}', color='green')
     
         mu=0
         sigma=np.std(error)    
@@ -82,17 +82,14 @@ def plot_hist(rides_df):
         
         plt.plot(x, y, 'r-', label='Normal Gaussian Distribution')
         plt.ylabel('Count', fontsize=25)
+        plt.xlabel('Error', fontsize=20)
         plt.tick_params(axis='both', labelsize=13)
-        plt.legend(fontsize='15')
-    
+        plt.legend(fontsize='17')
+        plt.title(f'percentage of underestimate: {under_estimate_percentage:.1f}\npercentage of overestimate: {over_estimate_percentage:.1f}', fontsize=25)
     plt.tight_layout()
     plt.show()
 ```
 
 ```{python}
-plot_hist(rides_df)
-```
-
-```{python}
-
+plot_hist(rides_df, bin = 50)
 ```
