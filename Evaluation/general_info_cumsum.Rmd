@@ -13,14 +13,14 @@ jupyter:
 ---
 
 ```{python}
+from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 ```
 
 ```{python}
-LABELED_PATH = 'data/labels.parquet'
+LABELED_PATH = '/Users/maedeh/Desktop/demand_project/shoofer-demand-prediction/data/labels.parquet'
 ```
 
 ```{python}
@@ -96,6 +96,24 @@ As we see, There is huge gap between LocationID24 and LocationID70 but for sure 
 
 ```{python}
 print(f'important_locations: {important_locations}')
+```
+
+```{python}
+def histogram_demand(bin):
+    n, bins, patches = plt.hist(labeled_df.Demand, bins=bin, color = 'magenta', edgecolor = 'black')
+    plt.show()
+    
+    print("Histogram of Demand Data :\n")
+    demand_histogram_table = pd.DataFrame({
+        'bin_limit': tuple(np.round(np.stack((bins[:-1], bins[1:]), axis=1), decimals = 2)),
+        'counts': n
+    })
+    return demand_histogram_table
+```
+
+```{python}
+histogram_demand(bin = 30)
+
 ```
 
 ```{python}
