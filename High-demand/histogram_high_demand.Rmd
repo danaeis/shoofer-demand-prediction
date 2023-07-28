@@ -71,7 +71,7 @@ def plot_hist(rides_df):
         plt.subplot(17,3,i+1)
         
         error = rides_df[rides_df.Location==loc]['Actual demand'] - rides_df[rides_df.Location==loc]['Predict demand']
-        sb.histplot(error, kde=True, bins=bin, label=f'Histogram and Estimated density of Location{i}', color='green')
+        sb.histplot(error, kde=True, bins=bin, label=f'Histogram and Estimated density of Location{loc}', color='green')
     
         mu=0
         sigma=np.std(error)    
