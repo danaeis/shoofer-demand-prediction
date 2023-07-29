@@ -34,7 +34,7 @@ from sklearn.model_selection import GridSearchCV
 ```{python id="zIkDLK9zwGmG"}
 INPUT_PATH = 'datasets/'
 ARIMA_PATH = 'statics/'
-OUTPUT_PATH = 'results/predictions.parquet'
+OUTPUT_PATH = 'results/xgb_predictions.parquet'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
