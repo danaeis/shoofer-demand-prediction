@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 import shap
 import xgboost as xgb
+
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
 ```
@@ -32,12 +33,18 @@ from sklearn.model_selection import GridSearchCV
 
 ```{python id="zIkDLK9zwGmG"}
 INPUT_PATH = 'datasets/'
+ARIMA_PATH = 'statics/'
 OUTPUT_PATH = 'results/predictions.parquet'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-FEATURE_LIST = ['Previous_week_demand', 'Previous_day_demand', 'Day_of_month', 'Day_of_week']
+FEATURE_LIST = ['ARIMA_predicts', 
+                'Previous_2week_demand',
+                'Previous_week_demand', 
+                'Previous_day_demand', 
+                'Day_of_month', 
+                'Day_of_week']
 
 TEST_START_DATE = '2023-04-1'
 
@@ -72,6 +79,15 @@ rides_df = load_data(INPUT_PATH, START_DATE, END_DATE)
 ```{python id="hCN-11QT3bp1"}
 print(f'rides dataframe shape : {rides_df.shape}')
 rides_df.head()
+```
+
+```{python}
+arima_df = pd.read_parquet(ARIMA_PATH)
+```
+
+```{python}
+print(f'rides dataframe shape : {arima_df.shape}')
+arima_df.head()
 ```
 
 <!-- #region id="X2ES_CY6-fb5" -->
@@ -124,16 +140,28 @@ labeled_df.head()
 <!-- #endregion -->
 
 ```{python id="ifvk6uWS6hnT"}
-def feature_engineering(dataset):
+def feature_engineering(dataset, statics_df):
     dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
     dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
+    dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
+
     dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
     dataset['Day_of_month'] = dataset['Date'].dt.day
+
+    dataset = dataset.sort_values(by = ['Date', 'Location'])
+    dataset['ARIMA_predicts'] = None
+    start_index = len(dataset) - len(statics_df)
+    end_index = len(dataset)
+    dataset.iloc[start_index:end_index, dataset.columns.get_loc('ARIMA_predicts')] = statics_df
+    dataset['ARIMA_predicts'] = dataset['ARIMA_predicts'].astype('float')
+    dataset = dataset.sort_values(by = ['Location', 'Date'])
+    
     return dataset
 ```
 
 ```{python id="12zNfv8YwGmK"}
-features_df = feature_engineering(labeled_df)
+features_df = feature_engineering(labeled_df, arima_df)
+features_df.dropna(inplace = True)
 ```
 
 ```{python id="bJxWEkiD3VOZ"}
@@ -196,11 +224,11 @@ def grid_search(model, test_parameters, train_data, feature_list, cv = None):
 
 ```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
 if AUTO_TUNE:
-    params_test = {'learning_rate':[0.1, 0.08, 0.06, 0.04, 0.02, 0.01], 
-                'subsample':[0.8, 0.9, 1], 
-                'colsample_bytree':[0.8, 0.9, 1], 
+    params_test = {'learning_rate':[0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01], 
+                'subsample':[0.5, 0.6, 0.7, 0.8, 0.9, 1], 
+                'colsample_bytree':[0.5, 0.6, 0.7, 0.8, 0.9, 1], 
                 'max_depth':range(2,10,1), 
-                'gamma':[0, 1, 5]
+                'gamma':[0, 1, 5],
                 }
     params = {"objective": "reg:squarederror"}
 
@@ -214,12 +242,12 @@ if AUTO_TUNE:
     
     print(best_params, best_score)
 else:
-    best_params = {'colsample_bytree': 0.8, 
+    best_params = {'colsample_bytree': 0.6, 
                    'gamma': 0, 
-                   'learning_rate': 0.08, 
-                   'max_depth': 3, 
-                   'subsample': 0.8, 
-                   'n_estimators': 1000
+                   'learning_rate': 0.05, 
+                   'max_depth': 4, 
+                   'subsample': 0.5, 
+                   'n_estimators': 2000
                    }
 ```
 
