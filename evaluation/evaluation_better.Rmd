@@ -1,0 +1,166 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.7
+  kernelspec:
+    display_name: demandenv
+    language: python
+    name: python3
+---
+
+# Imports
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sb
+import re
+from scipy.stats import norm
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import precision_score, recall_score, accuracy_score, roc_curve, auc, precision_recall_curve
+import warnings
+
+```
+
+# Configs
+
+```{python}
+LABELED_PATH = "../data/results/labels.parquet"
+PREDICTED_PATH = "../data/results/xgb_prediction_labeled.parquet"
+TEST_START_DATE = '2023-04-01'
+IMPORTANT_LOCATIONS = 50
+warnings.filterwarnings('ignore')
+```
+
+```{python}
+predictions_dict = {
+    'baseline_last_day':None,
+    'baseline_last_week':None,
+    'arima':None,
+    'model_regression':None,
+    'model_xgboost':None,
+}
+```
+
+# Load Data
+
+
+## Load labeled data
+
+```{python}
+labeled_df = pd.read_parquet(LABELED_PATH)
+print(labeled_df.shape)
+labeled_df.head()
+```
+
+```{python}
+test_df = labeled_df.loc[labeled_df['Date']>=TEST_START_DATE]
+test_df = test_df.reset_index(drop = True)
+test_df
+```
+
+```{python}
+def join_actual_predict(actual_df, predicted_df):
+    actual_predicted_df = actual_df.copy()
+    actual_predicted_df['Predicted_demand'] = predicted_df['Predicted_demand']
+    actual_predicted_df = actual_predicted_df.dropna()
+    return actual_predicted_df
+```
+
+## Load Predicted Date
+
+```{python}
+predictions_dict['model_xgboost'] = pd.read_parquet(PREDICTED_PATH)
+predictions_dict['model_xgboost'].tail()
+```
+
+```{python}
+predictions_dict['model_xgboost'] = join_actual_predict(test_df, predictions_dict['model_xgboost'])
+predictions_dict['model_xgboost'].head()
+```
+
+### BaseLine Models
+
+```{python}
+def baseline_predict(dataset, shift_val):
+    predicted_demand = dataset.groupby(['Location'])['Demand'].shift(shift_val)
+    predicted_data = pd.DataFrame(dataset[['Location', 'Date']])
+    predicted_data['Predicted_demand'] = predicted_demand
+    return predicted_data
+```
+
+```{python}
+predictions_dict['baseline_last_day'] = join_actual_predict(labeled_df,baseline_predict(labeled_df, 1))
+predictions_dict['baseline_last_week'] = join_actual_predict(labeled_df,baseline_predict(labeled_df, 7))
+```
+
+## Mape Calculation
+
+```{python}
+def calculate_mape(actual_predicted_df:pd.DataFrame):
+    
+    actual_predicted_df['Demand'] = np.where(actual_predicted_df['Demand']==0, 1, actual_predicted_df['Demand'])
+    actual_predicted_df['error'] = (
+        np.abs(actual_predicted_df['Demand']-actual_predicted_df['Predicted_demand'])
+        /actual_predicted_df['Demand']
+        )*100
+
+    return actual_predicted_df
+
+```
+
+```{python}
+predictions_dict['model_xgboost'] = calculate_mape(predictions_dict['model_xgboost'])
+predictions_dict['model_xgboost']
+```
+
+```{python}
+predictions_dict['baseline_last_day'] = calculate_mape(predictions_dict['baseline_last_day'])
+predictions_dict['baseline_last_week'] = calculate_mape(predictions_dict['baseline_last_week'])
+```
+
+```{python}
+predictions_dict['baseline_last_day'].head()
+```
+
+### Plot Mape for Models Predicted
+
+```{python}
+def plot_mape(errors: pd.DataFrame):
+    
+    fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(16,10))
+    for label,error_df in errors.items():
+        if (error_df is not None):                        
+            sorted_index = error_df.groupby('Location')['Demand'].aggregate(['sum']).sort_values('sum', ascending=False)
+            sorted_index = sorted_index.reset_index()
+    
+            error_location_df=error_df.groupby('Location')['error'].mean()
+            error_location_df = error_location_df.reindex(sorted_index['Location'])
+            error_location_df = error_location_df.reset_index()
+            error_location_df['Location'] = error_location_df['Location'].astype(str)
+
+            # devide in to three sections(based on demands)
+            error_location_df1 = error_location_df.iloc[:50]
+            error_location_df2 = error_location_df.iloc[50:150]
+            error_location_df3 = error_location_df.iloc[150:]
+            
+            error_location_df1.plot(y='error',kind='line',ax = axes[0], label=label )
+            axes[0].set_xticklabels(error_location_df1['Location'])
+            error_location_df2.plot(y='error',kind='line',ax = axes[1], label=label)
+            axes[1].set_xticklabels(error_location_df2['Location'])
+            error_location_df3.plot(y='error',kind='line',ax = axes[2], label=label)
+            axes[2].set_xticklabels(error_location_df3['Location'])
+```
+
+```{python}
+plot_mape(predictions_dict)
+```
+
+```{python}
+
+```
