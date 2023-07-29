@@ -221,8 +221,10 @@ plot_hist(high_demand_locations_df, bin = 50)
 ```{python}
 def calculate_mape(actual_predicted_df:pd.DataFrame):
     
-    actual_predicted_df['error'] = (np.abs(actual_predicted_df['Demand']-
-                                            actual_predicted_df['Predicted_demand']))*100
+    actual_predicted_df['error'] = (
+        np.abs(actual_predicted_df['Demand']-actual_predicted_df['Predicted_demand'])
+        /actual_predicted_df['Demand']
+        )*100
 
     error_per_location = (actual_predicted_df
                                 .groupby('Location')
@@ -286,13 +288,13 @@ plot_mape(error_per_dayofweek, 'day of the week')
 <!-- #endregion -->
 
 ```{python}
-d_bin = int((error_per_date.error.max()-error_per_date.error.min())//1000)
+d_bin = int((error_per_date.error.max()-error_per_date.error.min()))
 date_error_histogram_df = plot_histogram(error_per_date.error, d_bin, 'histogram of mape errors per date')
 
-l_bin = int((error_per_location.error.max()-error_per_location.error.min())//1000)
+l_bin = int((error_per_location.error.max()-error_per_location.error.min()))
 location_error_histogram_df = plot_histogram(error_per_location.error, l_bin, 'histogram of mape errors per location')
 
-dow_bin = int((error_per_dayofweek.error.max()-error_per_dayofweek.error.min())//1000)
+dow_bin = int((error_per_dayofweek.error.max()-error_per_dayofweek.error.min()))
 dayofweek_error_histogram_df = plot_histogram(error_per_dayofweek.error, dow_bin, 'histogram of mape errors per day of week')
 ```
 
