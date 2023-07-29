@@ -1,0 +1,58 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.7
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import geopandas as gpd
+import pandas as pd
+import matplotlib.pyplot as plt
+```
+
+# Load Data
+
+```{python}
+regions_df = gpd.read_file('data/taxi_zones.shp')
+regions_df = regions_df.rename(columns = {'LocationID' : 'Location'})
+labels_df = pd.read_parquet('data/labels.parquet')
+```
+
+# Visualization
+
+```{python}
+
+
+
+merged = pd.merge(regions_df, labels_df, on='Location')
+
+agg = merged.groupby('Location')['Demand'].sum().reset_index()
+map_df = regions_df.merge(agg, on='Location')
+
+borough_dfs = {}
+for borough in map_df["borough"].unique():
+    borough_dfs[borough] = map_df[map_df["borough"] == borough]
+
+fig, axs = plt.subplots(ncols = 2, nrows = len(borough_dfs)//2, figsize=(50, 75))
+for i, (borough, borough_df) in enumerate(borough_dfs.items()):
+    ax = axs.flat[i]
+
+    borough_df.plot(ax=ax, edgecolor="black", color="white")
+    borough_df.plot(ax=ax, column="Demand", cmap="YlOrRd", legend=True)
+
+    for j, row in borough_df.iterrows():
+        ax.text(row.geometry.centroid.x, row.geometry.centroid.y, 
+                str(row['Location']), fontsize = 18,
+                horizontalalignment='center', verticalalignment='center')
+
+    ax.set_title(f"{borough} Demand Heatmap", fontsize = 30)
+    ax.axis("off")
+```
