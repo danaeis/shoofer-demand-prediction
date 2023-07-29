@@ -35,6 +35,11 @@ PREDICTED_PATH = "../data/results/xgb_prediction_labeled.parquet"
 TEST_START_DATE = '2023-04-01'
 ```
 
+```{python}
+import warnings
+warnings.filterwarnings('ignore')
+```
+
 <!-- #region notebookRunGroups={"groupValue": "1"} -->
 # Load Data
 <!-- #endregion -->
@@ -80,10 +85,9 @@ actual_predicted_df.head()
 
 ```{python}
 def plot_histogram(plot_df, bin, title):
-    plt.figure(figsize=(10,6))
+    plt.figure(figsize=(6,4))
     n, bins, patches = plt.hist(plot_df, 
-                                bins=bin, 
-                                color = 'magenta', 
+                                bins=bin,
                                 edgecolor = 'black')
     plt.title(title)
     plt.show()
@@ -97,7 +101,9 @@ def plot_histogram(plot_df, bin, title):
 ```
 
 ```{python}
-demand_histogram_df = plot_histogram(test_df.Demand, bin=30, title='histogram of actual demands')
+demand_histogram_df = plot_histogram(test_df.Demand, 
+                                     bin=30, 
+                                     title='histogram of actual demands')
 ```
 
 ```{python}
@@ -141,7 +147,7 @@ def plot_cumsum_demand(labeled_df, target_demand):
     grouped_df = labeled_df.groupby('Location')['Demand'].sum().reset_index().sort_values(by='Demand', ascending=False).reset_index()
     cumulative_demand = (grouped_df['Demand'].cumsum() / grouped_df['Demand'].sum()).to_numpy()
 
-    plt.figure(figsize=(10,6))
+    plt.figure(figsize=(6,4))
     plt.plot(range(1,len(labeled_df['Location'].unique())+1), cumulative_demand)
     plt.xlabel('Location numbers')
     plt.ylabel('Cumulative Demand')
@@ -296,6 +302,85 @@ location_error_histogram_df = plot_histogram(error_per_location.error, l_bin, 'h
 
 dow_bin = int((error_per_dayofweek.error.max()-error_per_dayofweek.error.min()))
 dayofweek_error_histogram_df = plot_histogram(error_per_dayofweek.error, dow_bin, 'histogram of mape errors per day of week')
+```
+
+### Boundry Report
+
+
+#### Generate Baseline Predict
+
+```{python}
+def baseline_predict(dataset, shift_val):
+    predicted_demand = dataset.groupby(['Location'])['Demand'].shift(shift_val)
+    predicted_data = pd.DataFrame(dataset[['Location', 'Date']])
+    predicted_data['Predicted_demand'] = predicted_demand
+    return predicted_data
+```
+
+```{python}
+actual_high_damand = test_df.loc[test_df['Location'].isin(important_locations)]\
+                                        .reset_index(drop=True)
+actual_high_damand
+```
+
+```{python}
+baseline_1d_predicted_high_damand = baseline_predict(actual_high_damand, 1)
+baseline_1d_predicted_high_damand=baseline_1d_predicted_high_damand.dropna()
+baseline_1d_predicted_high_damand.head()
+```
+
+```{python}
+baseline_7d_predicted_high_damand = baseline_predict(actual_high_damand, 7)
+baseline_7d_predicted_high_damand = baseline_7d_predicted_high_damand.dropna()
+baseline_7d_predicted_high_damand.head()
+```
+
+```{python}
+actual_baseline_1d_predicted_df = actual_high_damand.copy()
+actual_baseline_1d_predicted_df['Predicted_demand'] = baseline_1d_predicted_high_damand['Predicted_demand']
+actual_baseline_1d_predicted_df =actual_baseline_1d_predicted_df.dropna()
+actual_baseline_1d_predicted_df.head()
+```
+
+```{python}
+actual_baseline_7d_predicted_df = actual_high_damand.copy()
+actual_baseline_7d_predicted_df['Predicted_demand'] = baseline_7d_predicted_high_damand['Predicted_demand']
+actual_baseline_7d_predicted_df = actual_baseline_7d_predicted_df.dropna()
+actual_baseline_7d_predicted_df.head()
+```
+
+#### Error for Baseline(predict demand = previouse day)
+
+```{python}
+baseline_error_per_location, baseline_error_per_date, baseline_error_per_dayofweek = calculate_mape(actual_baseline_1d_predicted_df)
+```
+
+```{python}
+d_bin = int((baseline_error_per_date.error.max()-baseline_error_per_date.error.min())/3)
+date_error_histogram_df = plot_histogram(baseline_error_per_date.error, d_bin, 'histogram of mape errors per date')
+
+l_bin = int((baseline_error_per_location.error.max()-baseline_error_per_location.error.min())/3)
+location_error_histogram_df = plot_histogram(baseline_error_per_location.error, l_bin, 'histogram of mape errors per location')
+
+dow_bin = int((baseline_error_per_dayofweek.error.max()-baseline_error_per_dayofweek.error.min()))
+dayofweek_error_histogram_df = plot_histogram(baseline_error_per_dayofweek.error, dow_bin, 'histogram of mape errors per day of week')
+```
+
+#### Error for Baseline(predict demand = previouse week)
+
+```{python}
+baseline_error_per_location, baseline_error_per_date, baseline_error_per_dayofweek = calculate_mape(actual_baseline_7d_predicted_df)
+```
+
+```{python}
+d_bin = int((baseline_error_per_date.error.max()-baseline_error_per_date.error.min())/3)
+date_error_histogram_df = plot_histogram(baseline_error_per_date.error, d_bin, 'histogram of mape errors per date')
+
+l_bin = int((baseline_error_per_location.error.max()-baseline_error_per_location.error.min())/3)
+location_error_histogram_df = plot_histogram(baseline_error_per_location.error, l_bin, 'histogram of mape errors per location')
+
+dow_bin = int((baseline_error_per_dayofweek.error.max()-baseline_error_per_dayofweek.error.min()))
+dayofweek_error_histogram_df = plot_histogram(baseline_error_per_dayofweek.error, dow_bin, 'histogram of mape errors per day of week')
 ```
 
 <!-- #region notebookRunGroups={"groupValue": "1"} -->
