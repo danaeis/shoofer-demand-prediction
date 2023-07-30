@@ -1,2 +1,6 @@
-/data
-/ride_data
+#Data sets#
+###########
+*.parquet
+
+datasets/
+results/
