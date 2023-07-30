@@ -39,7 +39,6 @@ warnings.filterwarnings('ignore')
 predictions_dict = {
     'baseline_last_day':None,
     'baseline_last_week':None,
-    'arima':None,
     'model_regression':None,
     'model_xgboost':None,
     'model_xgboost_arima':None,
@@ -50,7 +49,6 @@ predictions_dict = {
 sorted_locations_dict={
     'baseline_last_day':None,
     'baseline_last_week':None,
-    'arima':None,
     'model_regression':None,
     'model_xgboost':None,
     'model_xgboost_arima':None,
@@ -59,49 +57,8 @@ sorted_locations_dict={
 
 ```{python}
 predictions_mean_error_dict={
-    'baseline_last_day':
-    {
-        'Location':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                },
-        'Date':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                },
-        'day_of_week':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                }
-    },
+    
     'baseline_last_week':
-    {
-        'Location':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                },
-        'Date':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                },
-        'day_of_week':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                }
-    },
-    'arima':
     {
         'Location':
                 {
@@ -218,12 +175,6 @@ predictions_dict['model_regression'].head()
 ```
 
 ```{python}
-predictions_dict['arima'] = pd.read_parquet(PREDICTED_ARIMA_PATH)
-predictions_dict['arima']['Predicted_demand'] = predictions_dict['arima']['arima_predicted_demand']
-predictions_dict['arima'].head()
-```
-
-```{python}
 predictions_dict['model_xgboost_arima'] = pd.read_parquet(PREDICTED_XGB_ARIMA_PATH)
 predictions_dict['model_xgboost_arima'].head()
 ```
@@ -239,7 +190,6 @@ def baseline_predict(dataset, shift_val):
 ```
 
 ```{python}
-predictions_dict['baseline_last_day'] = baseline_predict(test_df, 1)
 predictions_dict['baseline_last_week'] = baseline_predict(test_df, 7)
 ```
 
@@ -255,18 +205,8 @@ def join_actual_predict(actual_df, predicted_df):
 ```
 
 ```{python}
-predictions_dict['arima'] = join_actual_predict(test_df, predictions_dict['arima'])
-predictions_dict['arima'].head()
-```
-
-```{python}
 predictions_dict['baseline_last_week'] = join_actual_predict(test_df,predictions_dict['baseline_last_week'])
 predictions_dict['baseline_last_week'].head()
-```
-
-```{python}
-predictions_dict['baseline_last_day'] = join_actual_predict(test_df,predictions_dict['baseline_last_day'])
-predictions_dict['baseline_last_day'].head()
 ```
 
 ```{python}
@@ -297,10 +237,10 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
 
 ```{python}
 sort_locations_on_demand(predictions_dict, sorted_locations_dict)
-sorted_locations_dict['arima'].head()
+sorted_locations_dict['model_xgboost_arima'].head()
 ```
 
-## Mean error Calculation
+# Mean error Calculation
 
 
 ### Error Columns
@@ -321,7 +261,7 @@ def calculate_error(actual_predicted_dict: dict):
 
 ```{python}
 calculate_error(predictions_dict)
-predictions_dict['arima'].head()
+predictions_dict['model_regression'].head()
 ```
 
 ### Aggregate Error Columns
@@ -354,6 +294,9 @@ def calculate_maen_error(actual_predicted_dict: dict, predictions_mean_dict: dic
                                             .agg(mape=('percentage_error','mean'),
                                                 mae=('error','mean'),
                                                 demand_mean=('Demand','mean')) 
+                important_mean_df['mape'] = np.where(important_mean_df['mape']>100, 100, important_mean_df['mape'])
+                others_mean_df['mape'] = np.where(others_mean_df['mape']>100, 100, others_mean_df['mape'])
+                all_mean_df['mape'] = np.where(all_mean_df['mape']>100, 100, all_mean_df['mape'])
                 if per == 'Location':
                     important_mean_df = important_mean_df.reindex(sorted_index[:IMPORTANT_LOCATIONS])
 
@@ -373,15 +316,7 @@ calculate_maen_error(predictions_dict, predictions_mean_error_dict)
 ```
 
 ```{python}
-predictions_mean_error_dict['arima']['Location']['All_loc'].head()
-```
-
-```{python}
-predictions_mean_error_dict['baseline_last_day']['Date']['Important_loc'].head()
-```
-
-```{python}
-predictions_mean_error_dict['model_xgboost']['Date']['All_loc'].head()
+predictions_mean_error_dict['baseline_last_week']['Date']['Important_loc'].head()
 ```
 
 ### Plot Mape for Models Predicted Demands
@@ -405,10 +340,10 @@ def plot_mape(predictions_mean_dict, per):
                 split_size = len(others_df)//2
                 others_df[:split_size].plot(x=per,y='mape',kind='line',marker='.',ax = axes[1],label=model)
                 others_df[split_size:].plot(x=per,y='mape',kind='line',marker='.',ax = axes[2],label=model)
-                all_df.plot(x=per,y='mae',kind='line',ax = axes[3],label=model)
+                all_df.plot(x=per,y='mape',kind='line',ax = axes[3],label=model)
             else:
                 others_df.plot(x=per,y='mape',kind='line',marker='.',ax = axes[1],label=model)
-                all_df.plot(x=per,y='mae',kind='line',ax = axes[2],label=model)
+                all_df.plot(x=per,y='mape',kind='line',ax = axes[2],label=model)
 
     axes[0].set_title('Models MAPE for '+str(IMPORTANT_LOCATIONS)+' imortant locations', bbox=dict( alpha=0.5)) 
     axes[1].set_title('Models MAPE for other locations', bbox=dict(alpha=0.5)) 
@@ -497,6 +432,11 @@ plot_mae(predictions_mean_error_dict, 'Date')
 ```{python}
 plot_mae(predictions_mean_error_dict, 'day_of_week')
 ```
+
+# Table of Results
+
+
+
 
 ```{python}
 
