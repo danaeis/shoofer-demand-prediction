@@ -41,18 +41,27 @@ borough_dfs = {}
 for borough in map_df["borough"].unique():
     borough_dfs[borough] = map_df[map_df["borough"] == borough]
 
-fig, axs = plt.subplots(ncols = 2, nrows = len(borough_dfs)//2, figsize=(50, 75))
+
 for i, (borough, borough_df) in enumerate(borough_dfs.items()):
-    ax = axs.flat[i]
+
+    fig, ax = plt.subplots(figsize=(10, 10))
 
     borough_df.plot(ax=ax, edgecolor="black", color="white")
+
     borough_df.plot(ax=ax, column="Demand", cmap="YlOrRd", legend=True)
 
     for j, row in borough_df.iterrows():
         ax.text(row.geometry.centroid.x, row.geometry.centroid.y, 
-                str(row['Location']), fontsize = 18,
+                f"{row['Location']}", 
+                fontsize=7,
                 horizontalalignment='center', verticalalignment='center')
 
-    ax.set_title(f"{borough} Demand Heatmap", fontsize = 30)
+    ax.set_title(f"{borough} Demand Heatmap")
     ax.axis("off")
+
+plt.show()
+```
+
+```{python}
+
 ```
