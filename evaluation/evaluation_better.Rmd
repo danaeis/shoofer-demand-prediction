@@ -31,7 +31,8 @@ import warnings
 
 ```{python}
 LABELED_PATH = "../data/results/labels.parquet"
-PREDICTED_PATH = "../data/results/xgb_prediction_labeled.parquet"
+PREDICTED_XGB_PATH = "../data/results/xgb_prediction_labeled.parquet"
+PREDICTED_ARIMA_PATH = "../data/results/arima_predict.parquet"
 TEST_START_DATE = '2023-04-01'
 IMPORTANT_LOCATIONS = 50
 warnings.filterwarnings('ignore')
@@ -69,19 +70,27 @@ def join_actual_predict(actual_df, predicted_df):
     actual_predicted_df = actual_df.copy()
     actual_predicted_df['Predicted_demand'] = predicted_df['Predicted_demand']
     actual_predicted_df = actual_predicted_df.dropna()
+    actual_predicted_df['day_of_week'] = actual_predicted_df['Date'].dt.dayofweek
     return actual_predicted_df
 ```
 
-## Load Predicted Date
+## Load Predicted Data
 
 ```{python}
-predictions_dict['model_xgboost'] = pd.read_parquet(PREDICTED_PATH)
+predictions_dict['model_xgboost'] = pd.read_parquet(PREDICTED_XGB_PATH)
 predictions_dict['model_xgboost'].tail()
 ```
 
 ```{python}
 predictions_dict['model_xgboost'] = join_actual_predict(test_df, predictions_dict['model_xgboost'])
 predictions_dict['model_xgboost'].head()
+```
+
+```{python}
+predictions_dict['arima'] = pd.read_parquet(PREDICTED_ARIMA_PATH)
+predictions_dict['arima']['Predicted_demand'] = predictions_dict['arima']['arima_predicted_demand']
+predictions_dict['arima'] = join_actual_predict(test_df, predictions_dict['arima'])
+predictions_dict['arima'].head()
 ```
 
 ### BaseLine Models
@@ -95,70 +104,352 @@ def baseline_predict(dataset, shift_val):
 ```
 
 ```{python}
-predictions_dict['baseline_last_day'] = join_actual_predict(labeled_df,baseline_predict(labeled_df, 1))
-predictions_dict['baseline_last_week'] = join_actual_predict(labeled_df,baseline_predict(labeled_df, 7))
+predictions_dict['baseline_last_day'] = join_actual_predict(test_df,baseline_predict(test_df, 1))
+predictions_dict['baseline_last_week'] = join_actual_predict(test_df,baseline_predict(test_df, 7))
 ```
 
-## Mape Calculation
+### Sort Locations by Demand
 
 ```{python}
-def calculate_mape(actual_predicted_df:pd.DataFrame):
+sorted_locations_dict={
+    'baseline_last_day':None,
+    'baseline_last_week':None,
+    'arima':None,
+    'model_regression':None,
+    'model_xgboost':None,
+}
+```
+
+```{python}
+def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
+    for label,predictions_df in predictions_dict.items():
+        if (predictions_df is not None):
+            sorted_index = predictions_df.groupby('Location')['Demand'].aggregate(['sum']).sort_values('sum', ascending=False)
+            sorted_index = sorted_index.reset_index()
+            sorted_locations_dict[label] = sorted_index
+```
+
+```{python}
+sort_locations_on_demand(predictions_dict, sorted_locations_dict)
+sorted_locations_dict['arima'].head()
+```
+
+## Mean error Calculation
+
+```{python}
+def calculate_error(actual_predicted_dict: dict):
+    for label,actual_predicted_df in actual_predicted_dict.items():
+        if (actual_predicted_df is not None):
+            actual_predicted_df['error'] = np.abs(
+                actual_predicted_df['Demand']-actual_predicted_df['Predicted_demand']
+                )
+            actual_Demand_df = np.where(actual_predicted_df['Demand']==0, 1, actual_predicted_df['Demand'])
+            actual_predicted_df['percentage_error'] = (
+                actual_predicted_df['error']/actual_Demand_df
+                )*100
+            
+```
+
+```{python}
+calculate_error(predictions_dict)
+predictions_dict['arima'].head()
+```
+
+```{python}
+predictions_mean_error_dict={
+    'baseline_last_day':
+    {
+        'Location':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'Date':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'day_of_week':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                }
+    },
+    'baseline_last_week':
+    {
+        'Location':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'Date':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'day_of_week':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                }
+    },
+    'arima':
+    {
+        'Location':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'Date':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'day_of_week':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                }
+    },
+    'model_regression':
+    {
+        'Location':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'Date':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'day_of_week':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                }
+    },
+    'model_xgboost':
+    {
+        'Location':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'Date':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                },
+        'day_of_week':
+                {
+                'Important_loc':None,
+                'Others_loc':None,
+                'All_loc':None
+                }
+    },
+}
+```
+
+```{python}
+def calculate_maen_error(actual_predicted_dict: dict, predictions_mean_dict: dict):
+    per_columns=['Location', 'Date', 'day_of_week']
+    for model,actual_predicted_df in actual_predicted_dict.items():
+        if (actual_predicted_df is not None):
+            sorted_index = sorted_locations_dict[model]['Location']
+            important_actual_predicted_df = actual_predicted_df.loc[actual_predicted_df['Location'].isin(sorted_index[:IMPORTANT_LOCATIONS])]
+            other_actual_predicted_df = actual_predicted_df.loc[~actual_predicted_df['Location'].isin(sorted_index[:IMPORTANT_LOCATIONS])]
+            for per in per_columns:
+                important_error_df = important_actual_predicted_df[[
+                                                                    per, 
+                                                                    'Demand',
+                                                                    'error', 
+                                                                    'percentage_error',
+                                                                    ]] 
+                others_error_df = other_actual_predicted_df[[
+                                                            per, 
+                                                            'Demand',
+                                                            'error', 
+                                                            'percentage_error'
+                                                            ]] 
+                all_error_df = actual_predicted_df[[
+                                                    per, 
+                                                    'Demand',
+                                                    'error', 
+                                                    'percentage_error'
+                                                    ]]
+                
+                important_mean_df = important_error_df\
+                                                .groupby(per)\
+                                                .agg(mape=('percentage_error','mean'),
+                                                    mae=('error','mean'),
+                                                    demand_mean=('Demand','mean')) 
+                others_mean_df = others_error_df\
+                                                .groupby(per)\
+                                                .agg(mape=('percentage_error','mean'),
+                                                    mae=('error','mean'),
+                                                    demand_mean=('Demand','mean')) 
+                all_mean_df = all_error_df\
+                                            .groupby(per)\
+                                            .agg(mape=('percentage_error','mean'),
+                                                mae=('error','mean'),
+                                                demand_mean=('Demand','mean')) 
+                if per == 'Location':
+                    important_mean_df = important_mean_df.reindex(sorted_index[:IMPORTANT_LOCATIONS])
+
+                    others_mean_df = others_mean_df.reindex(sorted_index[IMPORTANT_LOCATIONS:])
+
+                    all_mean_df = all_mean_df.reindex(sorted_index)
+                
+                predictions_mean_dict[model][per]['Important_loc'] = important_mean_df.reset_index()
+                predictions_mean_dict[model][per]['Others_loc'] = others_mean_df.reset_index()
+                predictions_mean_dict[model][per]['All_loc'] = all_mean_df.reset_index()
+                
     
-    actual_predicted_df['Demand'] = np.where(actual_predicted_df['Demand']==0, 1, actual_predicted_df['Demand'])
-    actual_predicted_df['error'] = (
-        np.abs(actual_predicted_df['Demand']-actual_predicted_df['Predicted_demand'])
-        /actual_predicted_df['Demand']
-        )*100
-
-    return actual_predicted_df
-
 ```
 
 ```{python}
-predictions_dict['model_xgboost'] = calculate_mape(predictions_dict['model_xgboost'])
-predictions_dict['model_xgboost']
+calculate_maen_error(predictions_dict, predictions_mean_error_dict)
 ```
 
 ```{python}
-predictions_dict['baseline_last_day'] = calculate_mape(predictions_dict['baseline_last_day'])
-predictions_dict['baseline_last_week'] = calculate_mape(predictions_dict['baseline_last_week'])
+predictions_mean_error_dict['arima']['Location']['All_loc'].head()
 ```
 
 ```{python}
-predictions_dict['baseline_last_day'].head()
+predictions_mean_error_dict['baseline_last_day']['Date']['Important_loc'].head()
+```
+
+```{python}
+predictions_mean_error_dict['baseline_last_day']['Date'].keys()
+```
+
+```{python}
+predictions_mean_error_dict['model_xgboost']['Date']['All_loc'].head()
 ```
 
 ### Plot Mape for Models Predicted
 
 ```{python}
-def plot_mape(errors: pd.DataFrame):
+def plot_mape(predictions_mean_dict, per, plot_num):
     
-    fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(16,10))
-    for label,error_df in errors.items():
-        if (error_df is not None):                        
-            sorted_index = error_df.groupby('Location')['Demand'].aggregate(['sum']).sort_values('sum', ascending=False)
-            sorted_index = sorted_index.reset_index()
+    fig, axes = plt.subplots(nrows=plot_num+1, ncols=1, figsize=(16,26))
     
-            error_location_df=error_df.groupby('Location')['error'].mean()
-            error_location_df = error_location_df.reindex(sorted_index['Location'])
-            error_location_df = error_location_df.reset_index()
-            error_location_df['Location'] = error_location_df['Location'].astype(str)
+    for model,mean_df in predictions_mean_dict.items():
+        all_df = mean_df[per]['All_loc']
+        if (all_df is not None):
+            all_df[per] = all_df[per].astype(str)
+            split_size = len(all_df)//plot_num
+            for i in range(0,len(all_df), split_size):
+                all_df[i:i+split_size].plot(x=per,
+                                            y='mape',
+                                            kind='line',
+                                            marker='.',
+                                            ax = axes[i//split_size], 
+                                            label=model)
+        fig.text(0.5, 0.04, 'mape error of models', ha='center', va='center')  
 
-            # devide in to three sections(based on demands)
-            error_location_df1 = error_location_df.iloc[:50]
-            error_location_df2 = error_location_df.iloc[50:150]
-            error_location_df3 = error_location_df.iloc[150:]
-            
-            error_location_df1.plot(y='error',kind='line',ax = axes[0], label=label )
-            axes[0].set_xticklabels(error_location_df1['Location'])
-            error_location_df2.plot(y='error',kind='line',ax = axes[1], label=label)
-            axes[1].set_xticklabels(error_location_df2['Location'])
-            error_location_df3.plot(y='error',kind='line',ax = axes[2], label=label)
-            axes[2].set_xticklabels(error_location_df3['Location'])
 ```
 
 ```{python}
-plot_mape(predictions_dict)
+plot_mape(predictions_mean_error_dict, 'Location',5)
+```
+
+```{python}
+plot_mape(predictions_mean_error_dict, 'day_of_week',2)
+```
+
+```{python}
+plot_mape(predictions_mean_error_dict, 'Date', 5)
+```
+
+## Plot MAE
+
+```{python}
+def plot_mae(predictions_mean_dict, per):
+    
+    fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(16,26))
+    
+    for model,mean_df in predictions_mean_dict.items():
+        important_df = mean_df[per]['Important_loc']
+        other_df = mean_df[per]['Others_loc']
+        all_df = mean_df[per]['All_loc']
+        if (important_df is not None) and (other_df is not None) and (all_df is not None):
+
+            important_df[per] = important_df[per].astype(str)
+            other_df[per] = other_df[per].astype(str)
+            
+            important_df.plot(  x=per,
+                            y='mae',
+                            kind='line',
+                            # marker='.',
+                            ax = axes[0], 
+                            label=model)
+            split_size = len(other_df)//2
+            other_df[:split_size].plot(  
+                                    x=per,
+                                    y='mae',
+                                    kind='line',
+                                    # marker='.',
+                                    ax = axes[1], 
+                                    label=model)
+            other_df[split_size:].plot(  
+                                    x=per,
+                                    y='mae',
+                                    kind='line',
+                                    # marker='.',
+                                    ax = axes[2], 
+                                    label=model)
+    for model,mean_df in predictions_mean_dict.items():
+        important_df = mean_df[per]['Important_loc']
+        other_df = mean_df[per]['Others_loc']
+        all_df = mean_df[per]['All_loc']
+        if (important_df is not None) and (other_df is not None) and (all_df is not None):
+
+            important_df[per] = important_df[per].astype(str)
+            other_df[per] = other_df[per].astype(str)
+            
+            important_df.plot(  x=per,
+                            y='demand_mean',
+                            kind='line',
+                            marker='.',
+                            ax = axes[0], 
+                            label='demand_mean')
+            split_size = len(other_df)//2
+            other_df[:split_size].plot(  
+                                    x=per,
+                                    y='demand_mean',
+                                    kind='line',
+                                    marker='.',
+                                    ax = axes[1], 
+                                    label='demand_mean')
+            other_df[split_size:].plot(  
+                                    x=per,
+                                    y='demand_mean',
+                                    kind='line',
+                                    marker='.',
+                                    ax = axes[2], 
+                                    label='demand_mean')
+            break
+        fig.text(0.5, 0.04, 'MAE error of models', ha='center', va='center')  
+```
+
+```{python}
+plot_mae(predictions_mean_error_dict, 'Location')
 ```
 
 ```{python}
