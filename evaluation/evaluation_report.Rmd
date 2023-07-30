@@ -32,45 +32,73 @@ PREDICTED_REGRESSION_PATH = "../data/results/ridge_predictions.parquet"
 PREDICTED_ARIMA_PATH = "../data/results/arima_predict.parquet"
 TEST_START_DATE = '2023-04-01'
 IMPORTANT_LOCATIONS = 50
+SAVE_PLOT_PATH = '../data/pngs/'
 warnings.filterwarnings('ignore')
 ```
 
 ```{python}
 report_dict = {
-    'baseline_last_week':{
-        'MAPE_of_important_locations':None,
-        'MAPE_of_other_locations':None,
-        'MAPE_of_all_locations':None,
-        'MAE_of_important_locations':None,
-        'MAE_of_other_locations':None,
-        'MAE_of_all_locations':None,
-        'demand_mean_of_important_locations':None,
-        'demand_mean_of_other_locations':None,
-        'demand_mean_of_all_locations':None
+    'important_lacations':{
+        'baseline_last_week':{
+            'MAPE':None,
+            'MAE':None,
+            'MSE':None,
+            'RMSE':None,
         },
-    'model_regression':{
-        'MAPE_of_important_locations':None,
-        'MAPE_of_other_locations':None,
-        'MAPE_of_all_locations':None,
-        'MAE_of_important_locations':None,
-        'MAE_of_other_locations':None,
-        'MAE_of_all_locations':None,
-        'demand_mean_of_important_locations':None,
-        'demand_mean_of_other_locations':None,
-        'demand_mean_of_all_locations':None
+        'model_regression':{
+            'MAPE':None,
+            'MAE':None,
+            'MSE':None,
+            'RMSE':None,
+        },
+        'model_xgboost':{
+            'MAPE':None,
+            'MAE':None,
+            'MSE':None,
+            'RMSE':None,
+        },
     },
-    'model_xgboost':{
-      'MAPE_of_important_locations':None,
-        'MAPE_of_other_locations':None,
-        'MAPE_of_all_locations':None,
-        'MAE_of_important_locations':None,
-        'MAE_of_other_locations':None,
-        'MAE_of_all_locations':None,
-        'demand_mean_of_important_locations':None,
-        'demand_mean_of_other_locations':None,
-        'demand_mean_of_all_locations':None
+    'others_locations':{
+        'baseline_last_week':{
+            'MAPE':None,
+            'MAE':None,
+            'MSE':None,
+            'RMSE':None,
+        },
+        'model_regression':{
+            'MAPE':None,
+            'MAE':None,
+            'MSE':None,
+            'RMSE':None,
+        },
+        'model_xgboost':{
+            'MAPE':None,
+            'MAE':None,
+            'MSE':None,
+            'RMSE':None,
+        },
     },
-}    
+    'all_locations':{
+        'baseline_last_week':{
+            'MAPE':None,
+            'MAE':None,
+            'MSE':None,
+            'RMSE':None,
+        },
+        'model_regression':{
+            'MAPE':None,
+            'MAE':None,
+            'MSE':None,
+            'RMSE':None,
+        },
+        'model_xgboost':{
+            'MAPE':None,
+            'MAE':None,
+            'MSE':None,
+            'RMSE':None,
+        },
+    },
+}
 ```
 
 ```{python}
@@ -84,7 +112,6 @@ predictions_dict = {
 
 ```{python}
 sorted_locations_dict={
-    'baseline_last_day':None,
     'baseline_last_week':None,
     'model_regression':None,
     'model_xgboost':None,
@@ -257,6 +284,9 @@ def calculate_error(actual_predicted_dict: dict):
             actual_predicted_df['error'] = np.abs(
                 actual_predicted_df['Demand']-actual_predicted_df['Predicted_demand']
                 )
+            actual_predicted_df['squared_error'] = np.square(
+                actual_predicted_df['Demand']-actual_predicted_df['Predicted_demand']
+                )
             actual_Demand_df = np.where(actual_predicted_df['Demand']==0, 1, actual_predicted_df['Demand'])
             actual_predicted_df['percentage_error'] = (
                 actual_predicted_df['error']/actual_Demand_df
@@ -352,7 +382,10 @@ def plot_mape(predictions_mean_dict, per):
 
     axes[0].set_title('Models MAPE for '+str(IMPORTANT_LOCATIONS)+' imortant locations', bbox=dict( alpha=0.5)) 
     axes[1].set_title('Models MAPE for other locations', bbox=dict(alpha=0.5)) 
-    axes[-1].set_title('Models MAPE for all locations', bbox=dict(alpha=0.5))  
+    axes[-1].set_title('Models MAPE for all locations', bbox=dict(alpha=0.5))
+
+    plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
+    plt.savefig(plot_name, format='svg', dpi=1200)  
 
 ```
 
@@ -400,6 +433,9 @@ def plot_mae(predictions_mean_dict, per):
     axes[1].set_title('Models MAE for other locations', bbox=dict(alpha=0.5)) 
     axes[-1].set_title('Models MAE for all locations', bbox=dict(alpha=0.5)) 
 
+    plot_name = SAVE_PLOT_PATH + 'MAE_plot per '+per+'.svg'
+    plt.savefig(plot_name, format='svg', dpi=1200)
+
 ```
 
 ```{python}
@@ -417,26 +453,43 @@ plot_mae(predictions_mean_error_dict, 'day_of_week')
 # Table of Results
 
 ```{python}
-for model, mean_df in predictions_mean_error_dict.items():
-    important_df = mean_df['Location']['Important_loc']
-    other_df = mean_df['Location']['Others_loc']
-    all_df = mean_df['Location']['All_loc']
-    if (important_df is not None) and (other_df is not None) and (all_df is not None):
-        report_dict[model]['MAE_of_important_locations'] = important_df['mae'].mean() 
-        report_dict[model]['MAE_of_other_locations'] = other_df['mae'].mean()
-        report_dict[model]['MAE_of_all_locations'] = all_df['mae'].mean()
+def create_table_errors(predictions_dict, report_dict):
+    for model, error_df in predictions_dict.items():
+        if error_df is not None:
+            report_dict['all_locations'][model]['MAE'] = error_df['error'].mean()
+            report_dict['all_locations'][model]['MSE'] = error_df['squared_error'].mean()
+            report_dict['all_locations'][model]['RMSE'] = np.sqrt(error_df['squared_error'].mean())
+            report_dict['all_locations'][model]['MAPE'] = error_df['percentage_error'].mean()
 
-        report_dict[model]['MAPE_of_important_locations'] = important_df['mape'].mean() 
-        report_dict[model]['MAPE_of_other_locations'] = other_df['mape'].mean()
-        report_dict[model]['MAPE_of_all_locations'] = all_df['mape'].mean()
+            error_important_df = error_df.loc[error_df['Location'].isin(sorted_locations_dict[model][:IMPORTANT_LOCATIONS]['Location'])]
+            error_others_df = error_df.loc[~error_df['Location'].isin(sorted_locations_dict[model][:IMPORTANT_LOCATIONS]['Location'])]
 
-        report_dict[model]['demand_mean_of_important_locations'] = important_df['demand_mean'].mean() 
-        report_dict[model]['demand_mean_of_other_locations'] = other_df['demand_mean'].mean()
-        report_dict[model]['demand_mean_of_all_locations'] = all_df['demand_mean'].mean()
+            report_dict['important_lacations'][model]['MAE'] = error_important_df['error'].mean()
+            report_dict['important_lacations'][model]['MSE'] = error_important_df['squared_error'].mean()
+            report_dict['important_lacations'][model]['RMSE'] = np.sqrt(error_important_df['squared_error'].mean())
+            report_dict['important_lacations'][model]['MAPE'] = error_important_df['percentage_error'].mean()
+            
+            report_dict['others_locations'][model]['MAE'] = error_others_df['error'].mean()
+            report_dict['others_locations'][model]['MSE'] = error_others_df['squared_error'].mean()
+            report_dict['others_locations'][model]['RMSE'] = np.sqrt(error_others_df['squared_error'].mean())
+            report_dict['others_locations'][model]['MAPE'] = error_others_df['percentage_error'].mean()
+    return report_dict
+```
+
+```{python}
+report_dict = create_table_errors(predictions_dict, report_dict)
+report_df = pd.DataFrame.from_dict({(i,j): report_dict[i][j] 
+                            for i in report_dict.keys() 
+                            for j in report_dict[i].keys()},
+                            orient='index')
+
+report_df.index = pd.MultiIndex.from_tuples(report_df.index)
+report_df = report_df.reset_index()
+report_df = report_df.rename(columns={"level_0": "locations", "level_1": "Models"})
+print(tabulate(report_df, headers = 'keys', tablefmt = 'fancy_grid'))
 
 ```
 
 ```{python}
-report_df = pd.DataFrame(report_dict)
-print(tabulate(report_df, headers = 'keys', tablefmt = 'fancy_grid'))
+
 ```
