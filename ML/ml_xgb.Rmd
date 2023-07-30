@@ -225,10 +225,11 @@ def grid_search(model, test_parameters, train_data, feature_list, cv = None):
 ```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
 if AUTO_TUNE:
     params_test = {'learning_rate':[0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01], 
-                'subsample':[0.5, 0.6, 0.7, 0.8, 0.9, 1], 
-                'colsample_bytree':[0.5, 0.6, 0.7, 0.8, 0.9, 1], 
-                'max_depth':range(2,10,1), 
+                'subsample':[0.8, 0.9, 1], 
+                'colsample_bytree':[0.6, 0.7, 0.8, 0.9, 1], 
+                'max_depth':[7], 
                 'gamma':[0, 1, 5],
+                'n_estimators':[1000]
                 }
     params = {"objective": "reg:squarederror"}
 
@@ -237,17 +238,17 @@ if AUTO_TUNE:
         test_parameters = params_test,
         train_data = train_df, 
         feature_list = FEATURE_LIST, 
-        cv = 5
+        cv = 3
         )
     
     print(best_params, best_score)
 else:
     best_params = {'colsample_bytree': 0.6, 
-                   'gamma': 0, 
-                   'learning_rate': 0.05, 
-                   'max_depth': 4, 
-                   'subsample': 0.5, 
-                   'n_estimators': 2000
+                   'gamma': 10, 
+                   'learning_rate': 0.01, 
+                   'max_depth': 7, 
+                   'subsample': 0.9, 
+                   'n_estimators': 1000
                    }
 ```
 
