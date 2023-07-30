@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import warnings
-
+from tabulate import tabulate
 ```
 
 # Configs
@@ -27,7 +27,7 @@ import warnings
 ```{python}
 LABELED_PATH = "../data/results/labels.parquet"
 PREDICTED_XGB_PATH = "../data/results/xgb_prediction_labeled.parquet"
-PREDICTED_XGB_ARIMA_PATH = "../data/results/xgb_predictions.parquet"
+PREDICTED_XGB_ARIMA_PATH = "../data/results/xgb_predictions_tuned.parquet"
 PREDICTED_REGRESSION_PATH = "../data/results/ridge_predictions.parquet"
 PREDICTED_ARIMA_PATH = "../data/results/arima_predict.parquet"
 TEST_START_DATE = '2023-04-01'
@@ -36,12 +36,49 @@ warnings.filterwarnings('ignore')
 ```
 
 ```{python}
+report_dict = {
+    'baseline_last_week':{
+        'MAPE_of_important_locations':None,
+        'MAPE_of_other_locations':None,
+        'MAPE_of_all_locations':None,
+        'MAE_of_important_locations':None,
+        'MAE_of_other_locations':None,
+        'MAE_of_all_locations':None,
+        'demand_mean_of_important_locations':None,
+        'demand_mean_of_other_locations':None,
+        'demand_mean_of_all_locations':None
+        },
+    'model_regression':{
+        'MAPE_of_important_locations':None,
+        'MAPE_of_other_locations':None,
+        'MAPE_of_all_locations':None,
+        'MAE_of_important_locations':None,
+        'MAE_of_other_locations':None,
+        'MAE_of_all_locations':None,
+        'demand_mean_of_important_locations':None,
+        'demand_mean_of_other_locations':None,
+        'demand_mean_of_all_locations':None
+    },
+    'model_xgboost':{
+      'MAPE_of_important_locations':None,
+        'MAPE_of_other_locations':None,
+        'MAPE_of_all_locations':None,
+        'MAE_of_important_locations':None,
+        'MAE_of_other_locations':None,
+        'MAE_of_all_locations':None,
+        'demand_mean_of_important_locations':None,
+        'demand_mean_of_other_locations':None,
+        'demand_mean_of_all_locations':None
+    },
+}    
+```
+
+```{python}
 predictions_dict = {
     'baseline_last_day':None,
     'baseline_last_week':None,
     'model_regression':None,
     'model_xgboost':None,
-    'model_xgboost_arima':None,
 }
 ```
 
@@ -51,7 +88,6 @@ sorted_locations_dict={
     'baseline_last_week':None,
     'model_regression':None,
     'model_xgboost':None,
-    'model_xgboost_arima':None,
 }
 ```
 
@@ -121,27 +157,6 @@ predictions_mean_error_dict={
                 'All_loc':None
                 }
     },
-    'model_xgboost_arima':
-    {
-        'Location':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                },
-        'Date':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                },
-        'day_of_week':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                }
-    },
 }
 ```
 
@@ -165,18 +180,13 @@ test_df.head()
 ## Load Predicted Data
 
 ```{python}
-predictions_dict['model_xgboost'] = pd.read_parquet(PREDICTED_XGB_PATH)
+predictions_dict['model_xgboost'] = pd.read_parquet(PREDICTED_XGB_ARIMA_PATH)
 predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
 predictions_dict['model_regression'] = pd.read_parquet(PREDICTED_REGRESSION_PATH)
 predictions_dict['model_regression'].head()
-```
-
-```{python}
-predictions_dict['model_xgboost_arima'] = pd.read_parquet(PREDICTED_XGB_ARIMA_PATH)
-predictions_dict['model_xgboost_arima'].head()
 ```
 
 ### BaseLine Models
@@ -219,11 +229,6 @@ predictions_dict['model_xgboost'] = join_actual_predict(test_df,predictions_dict
 predictions_dict['model_xgboost'].head()
 ```
 
-```{python}
-predictions_dict['model_xgboost_arima'] = join_actual_predict(test_df,predictions_dict['model_xgboost_arima'])
-predictions_dict['model_xgboost_arima'].head()
-```
-
 ### Sort Locations by Demand
 
 ```{python}
@@ -237,7 +242,7 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
 
 ```{python}
 sort_locations_on_demand(predictions_dict, sorted_locations_dict)
-sorted_locations_dict['model_xgboost_arima'].head()
+sorted_locations_dict['model_xgboost'].head()
 ```
 
 # Mean error Calculation
@@ -391,30 +396,6 @@ def plot_mae(predictions_mean_dict, per):
                 other_df.plot(x=per,y='mae',kind='line',ax = axes[1],label=model)
                 all_df.plot(x=per,y='mae',kind='line',ax = axes[2],label=model)
 
-
-    # plot demand mean to compare with MAE
-    for model,mean_df in predictions_mean_dict.items():
-        important_df = mean_df[per]['Important_loc']
-        other_df = mean_df[per]['Others_loc']
-        all_df = mean_df[per]['All_loc']
-        if (important_df is not None) and (other_df is not None) and (all_df is not None):
-
-            important_df[per] = important_df[per].astype(str)
-            other_df[per] = other_df[per].astype(str)
-            all_df[per] = all_df[per].astype(str)
-            
-            important_df.plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[0],label='demand_mean')
-            if per == 'Location':
-                split_size = len(other_df)//2
-                other_df[:split_size].plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[1],label='demand_mean')
-                other_df[split_size:].plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[2],label='demand_mean')
-                all_df.plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[3],label='demand_mean')
-
-            else:
-                other_df.plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[1],label='demand_mean')
-                all_df.plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[2],label='demand_mean')
-            break
-        
     axes[0].set_title('Models MAE for '+str(IMPORTANT_LOCATIONS)+' imortant locations', bbox=dict( alpha=0.5)) 
     axes[1].set_title('Models MAE for other locations', bbox=dict(alpha=0.5)) 
     axes[-1].set_title('Models MAE for all locations', bbox=dict(alpha=0.5)) 
@@ -435,9 +416,27 @@ plot_mae(predictions_mean_error_dict, 'day_of_week')
 
 # Table of Results
 
+```{python}
+for model, mean_df in predictions_mean_error_dict.items():
+    important_df = mean_df['Location']['Important_loc']
+    other_df = mean_df['Location']['Others_loc']
+    all_df = mean_df['Location']['All_loc']
+    if (important_df is not None) and (other_df is not None) and (all_df is not None):
+        report_dict[model]['MAE_of_important_locations'] = important_df['mae'].mean() 
+        report_dict[model]['MAE_of_other_locations'] = other_df['mae'].mean()
+        report_dict[model]['MAE_of_all_locations'] = all_df['mae'].mean()
 
+        report_dict[model]['MAPE_of_important_locations'] = important_df['mape'].mean() 
+        report_dict[model]['MAPE_of_other_locations'] = other_df['mape'].mean()
+        report_dict[model]['MAPE_of_all_locations'] = all_df['mape'].mean()
 
+        report_dict[model]['demand_mean_of_important_locations'] = important_df['demand_mean'].mean() 
+        report_dict[model]['demand_mean_of_other_locations'] = other_df['demand_mean'].mean()
+        report_dict[model]['demand_mean_of_all_locations'] = all_df['demand_mean'].mean()
+
+```
 
 ```{python}
-
+report_df = pd.DataFrame(report_dict)
+print(tabulate(report_df, headers = 'keys', tablefmt = 'fancy_grid'))
 ```
