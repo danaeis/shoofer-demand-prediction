@@ -18,6 +18,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 ```
 
+# Configs
+
+```{python}
+OUTPUT_PATH = 'pictures/'
+```
+
 # Load Data
 
 ```{python}
@@ -58,10 +64,7 @@ for i, (borough, borough_df) in enumerate(borough_dfs.items()):
 
     ax.set_title(f"{borough} Demand Heatmap")
     ax.axis("off")
+    plt.savefig(OUTPUT_PATH + borough + '.svg', format='svg' , dpi=1200)
 
 plt.show()
-```
-
-```{python}
-
 ```
