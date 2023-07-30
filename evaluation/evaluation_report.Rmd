@@ -1,0 +1,482 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.7
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Imports
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sb
+import re
+from scipy.stats import norm
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import precision_score, recall_score, accuracy_score, roc_curve, auc, precision_recall_curve
+```
+
+<!-- #region notebookRunGroups={"groupValue": ""} -->
+# Configs
+<!-- #endregion -->
+
+```{python}
+LABELED_PATH = "../data/results/labels.parquet"
+PREDICTED_PATH = "../data/results/xgb_prediction_labeled.parquet"
+TEST_START_DATE = '2023-04-01'
+```
+
+```{python}
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+<!-- #region notebookRunGroups={"groupValue": "1"} -->
+# Load Data
+<!-- #endregion -->
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+## Load labeled data
+<!-- #endregion -->
+
+```{python}
+labeled_df = pd.read_parquet(LABELED_PATH)
+print(labeled_df.shape)
+labeled_df.head()
+```
+
+```{python}
+test_df = labeled_df.loc[labeled_df['Date']>=TEST_START_DATE]
+test_df = test_df.reset_index(drop = True)
+test_df
+```
+
+```{python}
+predicted_df = pd.read_parquet(PREDICTED_PATH)
+predicted_df.tail()
+```
+
+```{python}
+actual_predicted_df = test_df.copy()
+actual_predicted_df['Predicted_demand'] = predicted_df['Predicted_demand']
+actual_predicted_df.isna().sum()
+```
+
+```{python}
+actual_predicted_df.head()
+```
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+## Data General information
+<!-- #endregion -->
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+### Demands Histogram
+<!-- #endregion -->
+
+```{python}
+def plot_histogram(plot_df, bin, title):
+    plt.figure(figsize=(6,4))
+    n, bins, patches = plt.hist(plot_df, 
+                                bins=bin,
+                                edgecolor = 'black')
+    plt.title(title)
+    plt.show()
+
+    demand_histogram_table = pd.DataFrame({
+        'bin_limit': tuple(np.round(np.stack((bins[:-1], bins[1:]), axis=1), decimals = 2)),
+        'counts': n
+    })
+
+    return demand_histogram_table
+```
+
+```{python}
+demand_histogram_df = plot_histogram(test_df.Demand, 
+                                     bin=30, 
+                                     title='histogram of actual demands')
+```
+
+```{python}
+print("Histogram of actual Demand:\n")
+demand_histogram_df.head()
+```
+
+### Check 'zero' demands in locations
+
+```{python}
+def zero_demand_location(labeled_df):
+
+    ind_low_demand_loc = labeled_df.groupby('Location')['Demand'].min()==0
+    low_demand_location = ind_low_demand_loc[ind_low_demand_loc==True].index
+    number_low_demand_location = len(low_demand_location)+3
+    percentage_low_demand_location = number_low_demand_location*100/265
+
+    print(f'number of locations that have at least one zero demand: {number_low_demand_location}')
+    print(f'percentage of locations that have at least one zero demand: {percentage_low_demand_location}')
+
+    low_demand = {}
+    zero_demand_loc = [i for i in range(1,266) if i not in labeled_df.Location.values]
+    low_demand['zero_demand_location'] = list(low_demand_location) + zero_demand_loc
+    low_demand['total_demand'] = [labeled_df.Demand[labeled_df.Location==i].sum() for i in low_demand_location] + [0,0,0]
+    low_demand = pd.DataFrame(low_demand).sort_values(by='total_demand', ascending=False).reset_index(drop=True)
+
+    return low_demand
+```
+
+```{python}
+low_demand = zero_demand_location(labeled_df)
+low_demand.head()
+```
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+### Finding Important Locations
+<!-- #endregion -->
+
+```{python}
+def plot_cumsum_demand(labeled_df, target_demand):
+    grouped_df = labeled_df.groupby('Location')['Demand'].sum().reset_index().sort_values(by='Demand', ascending=False).reset_index()
+    cumulative_demand = (grouped_df['Demand'].cumsum() / grouped_df['Demand'].sum()).to_numpy()
+
+    plt.figure(figsize=(6,4))
+    plt.plot(range(1,len(labeled_df['Location'].unique())+1), cumulative_demand)
+    plt.xlabel('Location numbers')
+    plt.ylabel('Cumulative Demand')
+    plt.title('Cumulative Demand by Location')
+    target_x = (cumulative_demand <= target_demand).argmin()
+    plt.axhline(y=target_demand, color='r', linestyle='--', label=f'Target Demand ({target_demand})')
+    plt.axvline(x=target_x, color='g', linestyle='--', label=f'Target Location ({target_x})')
+
+    plt.legend() 
+    plt.show()
+    important_locations = grouped_df.iloc[:target_x, grouped_df.columns.get_loc('Location')]
+    important_locations = important_locations.to_numpy()
+    return important_locations
+```
+
+```{python}
+important_locations = plot_cumsum_demand(labeled_df, 0.97)
+```
+
+```{python}
+important_locations
+```
+
+# Evaluation
+
+
+## High Demand Locations Report
+
+```{python}
+high_demand_locations_df = actual_predicted_df\
+                                    .loc[actual_predicted_df['Location'].isin(important_locations)]\
+                                        .reset_index(drop=True)
+high_demand_locations_df
+```
+
+### plot histogram of errors (measure over/under steamated)
+
+```{python}
+def plot_hist(rides_df, bin):
+    
+    
+    plt.rcParams['figure.figsize'] = (40, 70)
+
+    for i,loc in enumerate(rides_df.Location.unique()):
+        
+        plt.subplot(17,3,i+1)
+
+        error = rides_df[rides_df.Location==loc]['Demand'] - rides_df[rides_df.Location==loc]['Predicted_demand']
+        under_estimate_percentage = error[error>0].count()*100/len(error)
+        over_estimate_percentage = error[error<0].count()*100/len(error) 
+        
+        sb.histplot(error, kde=True, bins=bin, label=f'Histogram and Estimated density of Error for Location{loc}', color='green')
+
+        mu=0
+        sigma=np.std(error)    
+        x = np.linspace(np.min(error), np.max(error), 100)
+        y = norm.pdf(x, mu, sigma)
+        kde_max = np.max(sb.histplot(error, kde=True, bins=bin).get_lines()[0].get_data()[1])
+        y *= kde_max / np.max(y)
+        
+        plt.plot(x, y, 'r-', label='Normal Gaussian Distribution')
+        plt.ylabel('Count', fontsize=25)
+        plt.xlabel('Error', fontsize=20)
+        plt.tick_params(axis='both', labelsize=13)
+        plt.legend(fontsize='17')
+        plt.title(f'percentage of underestimate: {under_estimate_percentage:.1f}\npercentage of overestimate: {over_estimate_percentage:.1f}', fontsize=25)
+    plt.tight_layout()
+    plt.show()
+```
+
+```{python}
+plot_hist(high_demand_locations_df, bin = 50)
+```
+
+### calculate mape
+
+```{python}
+def calculate_mape(actual_predicted_df:pd.DataFrame):
+    
+    actual_predicted_df['error'] = (
+        np.abs(actual_predicted_df['Demand']-actual_predicted_df['Predicted_demand'])
+        /actual_predicted_df['Demand']
+        )*100
+
+    error_per_location = (actual_predicted_df
+                                .groupby('Location')
+                                .mean())[['Demand', 'Predicted_demand', 'error']]
+    error_per_date = (actual_predicted_df
+                                .groupby('Date')
+                                .mean())[['Demand', 'Predicted_demand', 'error']]
+                     
+    actual_predicted_df['day_of_week'] = actual_predicted_df['Date'].dt.dayofweek
+    error_per_dayofweek = (actual_predicted_df
+                                .groupby('day_of_week')
+                                .mean())[['Demand', 'Predicted_demand', 'error']]
+
+    return error_per_location, error_per_date, error_per_dayofweek
+
+```
+
+<!-- #region notebookRunGroups={"groupValue": ""} -->
+### plot mape
+<!-- #endregion -->
+
+```{python}
+
+def plot_mape(errors: pd.DataFrame, per):
+    errors = errors
+    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(16,5))
+    errors.plot(y='error', ax=axes, color='red', kind='line', marker='o')
+    
+    thresholds = pd.DataFrame({'min':[errors['error'].min()], 
+                               'mean':[errors['error'].mean()], 
+                               'max':[errors['error'].max()]})
+    for i, thre in enumerate(thresholds):
+            threshold = pd.DataFrame(index=errors.index)
+            threshold[str(thresholds.columns[i])] = [thresholds[thre][0]]*len(errors)
+            threshold.plot(ax=axes, kind='line', label=str(thre), linestyle='--')
+        
+    plt.xlabel(str(per))
+    title = 'Model MAPE per ' + str(per) 
+    plt.title(title)
+
+    plt.show()
+```
+
+```{python}
+error_per_location, error_per_date, error_per_dayofweek = calculate_mape(high_demand_locations_df)
+```
+
+```{python}
+print(error_per_location.shape)
+error_per_location.head()
+```
+
+```{python}
+plot_mape(error_per_location, 'Location')
+plot_mape(error_per_date, 'Date')
+plot_mape(error_per_dayofweek, 'day of the week')
+```
+
+<!-- #region notebookRunGroups={"groupValue": ""} -->
+### PLot Histogram of MAPE
+<!-- #endregion -->
+
+```{python}
+d_bin = int((error_per_date.error.max()-error_per_date.error.min()))
+date_error_histogram_df = plot_histogram(error_per_date.error, d_bin, 'histogram of mape errors per date')
+
+l_bin = int((error_per_location.error.max()-error_per_location.error.min()))
+location_error_histogram_df = plot_histogram(error_per_location.error, l_bin, 'histogram of mape errors per location')
+
+dow_bin = int((error_per_dayofweek.error.max()-error_per_dayofweek.error.min()))
+dayofweek_error_histogram_df = plot_histogram(error_per_dayofweek.error, dow_bin, 'histogram of mape errors per day of week')
+```
+
+### Boundry Report
+
+
+#### Generate Baseline Predict
+
+```{python}
+def baseline_predict(dataset, shift_val):
+    predicted_demand = dataset.groupby(['Location'])['Demand'].shift(shift_val)
+    predicted_data = pd.DataFrame(dataset[['Location', 'Date']])
+    predicted_data['Predicted_demand'] = predicted_demand
+    return predicted_data
+```
+
+```{python}
+actual_high_damand = test_df.loc[test_df['Location'].isin(important_locations)]\
+                                        .reset_index(drop=True)
+actual_high_damand
+```
+
+```{python}
+baseline_1d_predicted_high_damand = baseline_predict(actual_high_damand, 1)
+baseline_1d_predicted_high_damand=baseline_1d_predicted_high_damand.dropna()
+baseline_1d_predicted_high_damand.head()
+```
+
+```{python}
+baseline_7d_predicted_high_damand = baseline_predict(actual_high_damand, 7)
+baseline_7d_predicted_high_damand = baseline_7d_predicted_high_damand.dropna()
+baseline_7d_predicted_high_damand.head()
+```
+
+```{python}
+actual_baseline_1d_predicted_df = actual_high_damand.copy()
+actual_baseline_1d_predicted_df['Predicted_demand'] = baseline_1d_predicted_high_damand['Predicted_demand']
+actual_baseline_1d_predicted_df =actual_baseline_1d_predicted_df.dropna()
+actual_baseline_1d_predicted_df.head()
+```
+
+```{python}
+actual_baseline_7d_predicted_df = actual_high_damand.copy()
+actual_baseline_7d_predicted_df['Predicted_demand'] = baseline_7d_predicted_high_damand['Predicted_demand']
+actual_baseline_7d_predicted_df = actual_baseline_7d_predicted_df.dropna()
+actual_baseline_7d_predicted_df.head()
+```
+
+#### Error for Baseline(predict demand = previouse day)
+
+```{python}
+baseline_error_per_location, baseline_error_per_date, baseline_error_per_dayofweek = calculate_mape(actual_baseline_1d_predicted_df)
+```
+
+```{python}
+d_bin = int((baseline_error_per_date.error.max()-baseline_error_per_date.error.min())/3)
+date_error_histogram_df = plot_histogram(baseline_error_per_date.error, d_bin, 'histogram of mape errors per date')
+
+l_bin = int((baseline_error_per_location.error.max()-baseline_error_per_location.error.min())/3)
+location_error_histogram_df = plot_histogram(baseline_error_per_location.error, l_bin, 'histogram of mape errors per location')
+
+dow_bin = int((baseline_error_per_dayofweek.error.max()-baseline_error_per_dayofweek.error.min()))
+dayofweek_error_histogram_df = plot_histogram(baseline_error_per_dayofweek.error, dow_bin, 'histogram of mape errors per day of week')
+```
+
+#### Error for Baseline(predict demand = previouse week)
+
+```{python}
+baseline_error_per_location, baseline_error_per_date, baseline_error_per_dayofweek = calculate_mape(actual_baseline_7d_predicted_df)
+```
+
+```{python}
+d_bin = int((baseline_error_per_date.error.max()-baseline_error_per_date.error.min())/3)
+date_error_histogram_df = plot_histogram(baseline_error_per_date.error, d_bin, 'histogram of mape errors per date')
+
+l_bin = int((baseline_error_per_location.error.max()-baseline_error_per_location.error.min())/3)
+location_error_histogram_df = plot_histogram(baseline_error_per_location.error, l_bin, 'histogram of mape errors per location')
+
+dow_bin = int((baseline_error_per_dayofweek.error.max()-baseline_error_per_dayofweek.error.min()))
+dayofweek_error_histogram_df = plot_histogram(baseline_error_per_dayofweek.error, dow_bin, 'histogram of mape errors per day of week')
+```
+
+<!-- #region notebookRunGroups={"groupValue": "1"} -->
+## Low Demand Locations Report
+<!-- #endregion -->
+
+```{python}
+low_demand_locations_df = actual_predicted_df\
+                                    .loc[~actual_predicted_df['Location'].isin(important_locations)]\
+                                        .reset_index(drop = True)
+low_demand_locations_df
+```
+
+### Calculate Accuracy
+
+```{python}
+def accuracy_per_location(actual_predicted_df: pd.DataFrame):
+    num_loc = actual_predicted_df['Location'].unique()
+    per_rec_location = pd.DataFrame(columns=['Location','Date', 'Demand', 'Predicted_demand', 'actual_class','predict_class'])
+    for loc in num_loc:
+        loc_df = actual_predicted_df.loc[actual_predicted_df['Location']==loc]
+        loc_mean_demand = loc_df['Demand'].mean()
+        loc_df['actual_class'] = loc_df['Demand']-loc_mean_demand
+        loc_df['predict_class'] = loc_df['Predicted_demand']-loc_mean_demand
+        per_rec_location = pd.concat([per_rec_location,loc_df])
+            
+    y_test = np.where(per_rec_location['actual_class']>0,1,0)
+    y_pred = np.where(per_rec_location['predict_class']>0,1,0)
+    conf_matrix = confusion_matrix(y_true=y_test, y_pred=y_pred)
+    
+    # Print the confusion matrix
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.matshow(conf_matrix, cmap=plt.cm.Oranges, alpha=0.3)
+    for i in range(conf_matrix.shape[0]):
+        for j in range(conf_matrix.shape[1]):
+            ax.text(x=j, y=i,s=conf_matrix[i, j], va='center', ha='center', size='xx-large')
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    accuracy = accuracy_score(y_test, y_pred)
+    
+    plt.xlabel('Predictions', fontsize=18)
+    plt.ylabel('Actuals', fontsize=18)
+    title = 'Confusion Matrix for low demand locations:'
+    plt.title(title, fontsize=18)
+    plt.show()
+    print(f'Accuracy score: {accuracy}\nPrecision score: {precision}\nRecall score: {recall}')
+    return per_rec_location, y_test, y_pred
+
+    
+```
+
+```{python}
+accuracy_per_location_df, test_labels, pred_labels = accuracy_per_location(low_demand_locations_df)
+```
+
+```{python}
+accuracy_per_location_df.head()
+```
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+### Roc Curve
+<!-- #endregion -->
+
+```{python}
+fpr, tpr, thresholds = roc_curve(test_labels, accuracy_per_location_df['predict_class'].to_numpy())
+roc_auc = auc(fpr, tpr)
+
+plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc="lower right")
+plt.show()
+
+```
+
+<!-- #region notebookRunGroups={"groupValue": "2"} -->
+### Precision Recall Curve
+<!-- #endregion -->
+
+```{python}
+precision, recall, thresholds = precision_recall_curve(test_labels, accuracy_per_location_df['predict_class'].to_numpy())
+
+plt.plot(recall, precision, color='darkorange', lw=2)
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.title('Precision-Recall Curve')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.show()
+
+```
+
+```{python}
+
+```
