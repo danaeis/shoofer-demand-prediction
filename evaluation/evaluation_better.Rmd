@@ -388,7 +388,7 @@ plot_mape(predictions_mean_error_dict, 'day_of_week')
 ```{python}
 def plot_mae(predictions_mean_dict, per):
     
-    fig, axes = plt.subplots(nrows=(3 if (per == 'Location') else 2 ), ncols=1, figsize=((10,20)if (per == 'Location') else (10,15))) 
+    fig, axes = plt.subplots(nrows=(4 if (per == 'Location') else 3 ), ncols=1, figsize=((10,20)if (per == 'Location') else (10,15))) 
 
     
     for model,mean_df in predictions_mean_dict.items():
@@ -399,14 +399,17 @@ def plot_mae(predictions_mean_dict, per):
 
             important_df[per] = important_df[per].astype(str)
             other_df[per] = other_df[per].astype(str)
+            all_df[per] = all_df[per].astype(str)
             
             important_df.plot(  x=per,y='mae',kind='line',ax = axes[0],label=model)
             if per == 'Location':
                 split_size = len(other_df)//2
                 other_df[:split_size].plot(x=per,y='mae',kind='line',ax = axes[1], label=model)
                 other_df[split_size:].plot(x=per,y='mae',kind='line',ax = axes[2],label=model)
+                all_df.plot(x=per,y='mae',kind='line',ax = axes[3],label=model)
             else:
                 other_df.plot(x=per,y='mae',kind='line',ax = axes[1],label=model)
+                all_df.plot(x=per,y='mae',kind='line',ax = axes[2],label=model)
 
 
     # plot demand mean to compare with MAE
@@ -418,19 +421,24 @@ def plot_mae(predictions_mean_dict, per):
 
             important_df[per] = important_df[per].astype(str)
             other_df[per] = other_df[per].astype(str)
+            all_df[per] = all_df[per].astype(str)
             
             important_df.plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[0],label='demand_mean')
             if per == 'Location':
                 split_size = len(other_df)//2
-                other_df[:split_size].plot(x=per,y='mae',kind='line',ax = axes[1], label=model)
-                other_df[split_size:].plot(x=per,y='mae',kind='line',ax = axes[2],label=model)
+                other_df[:split_size].plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[1],label='demand_mean')
+                other_df[split_size:].plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[2],label='demand_mean')
+                all_df.plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[3],label='demand_mean')
+
             else:
-                other_df.plot(x=per,y='mae',kind='line',ax = axes[1],label=model)
+                other_df.plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[1],label='demand_mean')
+                all_df.plot(x=per,y='demand_mean',kind='line',marker='.',ax = axes[2],label='demand_mean')
             break
         
-    axes[0].set_title('for '+str(IMPORTANT_LOCATIONS)+' imortant locations', bbox=dict( alpha=0.5)) 
-    axes[1].set_title('other locations', bbox=dict(alpha=0.5)) 
-    fig.text(0.5, 0.05, s='MAE error of models', ha='center', va='center')  
+    axes[0].set_title('Models MAE for '+str(IMPORTANT_LOCATIONS)+' imortant locations', bbox=dict( alpha=0.5)) 
+    axes[1].set_title('Models MAE for other locations', bbox=dict(alpha=0.5)) 
+    axes[-1].set_title('Models MAE for all locations', bbox=dict(alpha=0.5)) 
+    # fig.text(0.5, 0.05, s='MAE error of models', ha='center', va='center')  
 ```
 
 ```{python}
