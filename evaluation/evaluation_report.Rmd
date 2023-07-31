@@ -486,7 +486,11 @@ df = pd.DataFrame(report_df,
                   index=pd.Index(['baseline_last_week', 'model_regression', 'model_xgboost']),
                   columns=pd.MultiIndex.from_product([['important_lacations', 'others_locations', 'all_locations'],
                                                       ['MAPE','MAE','RMSE']], names=['location category:', 'Error Metrics:']))
-df.style
+
+```
+
+```{python}
+df.style.format('{:.2f}')
 ```
 
 ```{python}
