@@ -482,5 +482,13 @@ report_df = report_df.rename(columns={"('MAPE', 'important_lacations')": "Mape\n
 ```
 
 ```{python}
-report_df
+df = pd.DataFrame(report_df,
+                  index=pd.Index(['baseline_last_week', 'model_regression', 'model_xgboost']),
+                  columns=pd.MultiIndex.from_product([['important_lacations', 'others_locations', 'all_locations'],
+                                                      ['MAPE','MAE','RMSE']], names=['location category:', 'Error Metrics:']))
+df.style
+```
+
+```{python}
+
 ```
