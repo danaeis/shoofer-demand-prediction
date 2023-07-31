@@ -49,11 +49,6 @@ report_dict = {
             'model_regression':None,
             'model_xgboost':None
         },
-        'MSE':{
-            'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
-        },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
@@ -72,11 +67,6 @@ report_dict = {
             'model_regression':None,
             'model_xgboost':None
         },
-        'MSE':{
-            'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
-        },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
@@ -91,11 +81,6 @@ report_dict = {
             'model_xgboost':None
         },
         'MAE':{
-            'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
-        },
-        'MSE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None
@@ -466,21 +451,18 @@ plot_mae(predictions_mean_error_dict, 'day_of_week')
 def create_table_errors(predictions_dict, report_dict):
     for model, error_df in predictions_dict.items():
         if error_df is not None:
-            report_dict['all_locations']['MAE'][model] = error_df['error'].mean()
-            report_dict['all_locations']['MSE'][model] = error_df['squared_error'].mean()
+            report_dict['all_locations']['MAE'][model] = error_df['error'].mean()            
             report_dict['all_locations']['RMSE'][model] = np.sqrt(error_df['squared_error'].mean())
             report_dict['all_locations']['MAPE'][model] = error_df['percentage_error'].mean()
 
             error_important_df = error_df.loc[error_df['Location'].isin(sorted_locations_dict[model][:IMPORTANT_LOCATIONS]['Location'])]
             error_others_df = error_df.loc[~error_df['Location'].isin(sorted_locations_dict[model][:IMPORTANT_LOCATIONS]['Location'])]
 
-            report_dict['important_lacations']['MAE'][model] = error_important_df['error'].mean()
-            report_dict['important_lacations']['MSE'][model] = error_important_df['squared_error'].mean()
+            report_dict['important_lacations']['MAE'][model] = error_important_df['error'].mean()            
             report_dict['important_lacations']['RMSE'][model] = np.sqrt(error_important_df['squared_error'].mean())
             report_dict['important_lacations']['MAPE'][model] = error_important_df['percentage_error'].mean()
             
-            report_dict['others_locations']['MAE'][model] = error_others_df['error'].mean()
-            report_dict['others_locations']['MSE'][model] = error_others_df['squared_error'].mean()
+            report_dict['others_locations']['MAE'][model] = error_others_df['error'].mean()            
             report_dict['others_locations']['RMSE'][model] = np.sqrt(error_others_df['squared_error'].mean())
             report_dict['others_locations']['MAPE'][model] = error_others_df['percentage_error'].mean()
     return report_dict
@@ -500,12 +482,5 @@ report_df = report_df.rename(columns={"('MAPE', 'important_lacations')": "Mape\n
 ```
 
 ```{python}
-report_df.style \
-  .format(precision=3, thousands=".", decimal=",") \
-  .format_index(str.upper, axis=1) \
-  .relabel_index(["baseline_last_week", "model_regression", "model_xgboost"], axis=0)
-```
-
-```{python}
-
+report_df
 ```
