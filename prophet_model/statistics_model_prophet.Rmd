@@ -12,6 +12,10 @@ jupyter:
     name: python3
 ---
 
+<!-- #region id="KzcJPH0e1BE6" -->
+# imports
+<!-- #endregion -->
+
 ```{python colab={'base_uri': 'https://localhost:8080/'}, id="kEr9J20VzxOq", outputId="b88a69f2-0a15-4bfc-a660-a7a3bf9ad751"}
 from math import sqrt
 from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, mean_absolute_error
@@ -19,16 +23,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from prophet import Prophet
-import warnings
+import logging
+import multiprocessing
 ```
 
 ```{python}
-warnings.filterwarnings("ignore")
+logging.getLogger("prophet").setLevel(logging.ERROR)
+logging.getLogger("cmdstanpy").setLevel(logging.ERROR)
 ```
-
-<!-- #region id="KzcJPH0e1BE6" -->
-# imports
-<!-- #endregion -->
 
 <!-- #region id="uEOhGFuj2J3p" -->
 # loading Dataset
@@ -36,7 +38,7 @@ warnings.filterwarnings("ignore")
 
 ```{python}
 INPUT_PATH = '/Users/maedeh/Desktop/demand_project/shoofer-demand-prediction/data/labels.parquet'
-OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/shoofer-demand-prediction/data/arima_predict.parquet'
+OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/shoofer-demand-prediction/data/prophet_predict.parquet'
 ```
 
 ```{python id="xLg8mI4Yr8Zc"}
@@ -67,82 +69,42 @@ print(f'location_labels_df shape : {location_labels_df.shape}')
 location_labels_df.head()
 ```
 
-```{python}
-loc = 4
-train_data = location_labels_df.iloc[:100,[0,loc]]
-test_data = location_labels_df.iloc[100:,[0,loc]]
-train_data.columns = ['ds','y']
-test_data.columns = ['ds','y']
-train_data.head()
-```
-
-```{python}
-model = Prophet()
-model.fit(train_data)
-```
-
-```{python}
-future = model.make_future_dataframe(periods=20)
-predict = model.predict(future)[['yhat','yhat_lower','yhat_upper']]
-
-```
-
-```{python}
-y_true = location_labels_df.iloc[:,loc]
-y_pred = predict.yhat
-mean_absolute_percentage_error(y_true, y_pred)
-```
-
-```{python}
-plt.plot(location_labels_df.iloc[:,loc], color='r')
-plt.plot(predict)
-
-```
-
 <!-- #region id="7fgxL33c7yRz" -->
-# ARIMA MODEL
+# Prophet MODEL
 <!-- #endregion -->
 
 <!-- #region id="Ty2gmgJ3Yuig" -->
 ## train 
 <!-- #endregion -->
 
-```{python id="HafiobWpYqiK"}
-train_size_ratio = 0.12
-```
-
 ```{python}
-# df.columns
+train_size_ratio = 0.12
 ```
 
 ```{python id="QWWSsvJwVWaR"}
 def split_data(location_labels_df, location, train_size_ratio):
     train_end_date = int(len(location_labels_df) * train_size_ratio)
-    train_data = location_labels_df.loc[0:train_end_date, location]
-    test_data = location_labels_df.loc[train_end_date:, location]
+    train_data = location_labels_df.loc[:train_end_date,['Date',location]]
+    test_data = location_labels_df.loc[train_end_date:, ['Date',location]]
+    train_data.columns = ['ds','y']
+    test_data.columns = ['ds','y']
     return (train_data, test_data)
 ```
 
 ```{python id="jbk1N0pkxIPy"}
-def arima_forecast(train_data, test_data):
-    history = [x for x in train_data]
+def prophet_forecast(train_data, test_data):
+    history = train_data
     predictions = []
-    model = pm.arima.auto_arima(
-                              history, start_p=1, start_q=1,
-                              test='kpss', max_p=8, max_q=8,
-                              seasonal=False, m=1,
-                              d=None, start_P=0,
-                              suppress_warnings=False, trace=False)
     for t in range(len(test_data)):
-        best_arima_model_fit = pm.arima.ARIMA(order=model.get_params().get("order")).fit(history)
-        output = best_arima_model_fit.predict(n_periods=1)
-        yhat = output[0]
-        predictions.append(int(yhat))
-        obs = test_data.iloc[t]
-        history.append(obs)
-    
-    test_data = test_data.reset_index()
-    return (test_data.iloc[:,1], predictions, best_arima_model_fit.fittedvalues())
+        model = Prophet()
+        model.fit(history)
+        ds = model.make_future_dataframe(periods=1)
+        output = model.predict(ds)
+        predictions.append(int(output.yhat.iloc[-1]))
+        obs = test_data.iloc[[t],:]
+        history = pd.concat([history, obs], axis = 0).reset_index(drop=True)
+
+    return (test_data.y, predictions)
 
 ```
 
@@ -151,11 +113,33 @@ def arima_forecast(train_data, test_data):
 
 <!-- #endregion -->
 
-```{python id="SqRKbhM_rgY8"}
-def rmse(test_data, predictions):
-  rmse = sqrt(mean_squared_error(test_data, predictions))
-  return rmse
+```{python}
+def predict_all_location(location_labels_df, train_size_ratio):
+    
+    predict_date_location = {}
+    test_date_location = {}
+    column = location_labels_df.columns
+    
+    for loc in column[1:]:
+        
+        train_data, test_data = split_data (location_labels_df, loc, train_size_ratio)
+        result = prophet_forecast(train_data, test_data)
+        test_date_location[loc] = result[0]
+        predict_date_location[loc] = result[1]
+    
+        
+    test_date_location = pd.DataFrame(test_date_location).reset_index(drop=True)
+    predict_date_location = pd.DataFrame(predict_date_location).reset_index(drop=True)
+    return (test_date_location, predict_date_location)
 ```
+
+```{python}
+test_date_location, predict_date_location = predict_all_location(location_labels_df, train_size_ratio)
+```
+
+<!-- #region id="t9TmKfCS3Fpx" -->
+## evaluation
+<!-- #endregion -->
 
 ```{python id="gD4cUUg1rlUd"}
 def mape(test_data, predictions):
@@ -163,57 +147,34 @@ def mape(test_data, predictions):
   return mape
 ```
 
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="qMqwNRrNH6YE", outputId="382f9add-f885-4cef-a464-8f7aef0c34d8"}
-def predict_all_location(location_labels_df, train_size_ratio):
-
-    all_loc_rmse = []
-    all_loc_mape = []
-    predicted_date_location = {}
-    test_date_location = {}
-    fitted_data_all_loc = {}
-    column = location_labels_df.columns
-    
-    for loc in column:
-        
-        train_data, test_data = split_data (location_labels_df, loc, train_size_ratio)
-        result = arima_forecast(train_data, test_data)
-                
-        test_date_location[loc] = result[0]
-        predicted_date_location[loc] = result[1]
-        fitted_data_all_loc[loc] = result[2]
-        
-        val_rmse = rmse (result[0], result[1])
-        val_mape = mape (result[0], result[1])
-        all_loc_rmse.append(val_rmse)
-        all_loc_mape.append(val_mape)
-    
-    all_loc_rmse = pd.DataFrame(all_loc_rmse, index=column , columns= ['rmse'])
-    all_loc_mape = pd.DataFrame(all_loc_mape, index=column , columns= ['mape'])
-    all_loc_rmse = pd.DataFrame(all_loc_rmse)
-    all_loc_mape = pd.DataFrame(all_loc_mape)
-    test_date_location = pd.DataFrame(test_date_location)
-    fitted_data_all_loc = pd.DataFrame(fitted_data_all_loc)
-    predicted_date_location = pd.DataFrame(predicted_date_location)
-    return (test_date_location, predicted_date_location, fitted_data_all_loc, all_loc_rmse, all_loc_mape)
+```{python id="SqRKbhM_rgY8"}
+def rmse(test_data, predictions):
+  rmse = sqrt(mean_squared_error(test_data, predictions))
+  return rmse
 ```
 
 ```{python}
-test_date_location, predicted_date_location, fitted_data_all_loc, all_loc_rmse, all_loc_mape = predict_all_location(location_labels_df, train_size_ratio)
+def mape_rmse_all_location(test_date_location,predict_date_location):
+    mape_error = {col: mape(test_date_location[col],predict_date_location[col]) for col in test_date_location.columns}
+    rmse_error = {col: rmse(test_date_location[col],predict_date_location[col]) for col in test_date_location.columns}
+    all_loc_mape = pd.DataFrame.from_dict(mape_error, orient='index')
+    all_loc_rmse = pd.DataFrame.from_dict(rmse_error, orient='index')
+    return (all_loc_mape, all_loc_rmse)
 ```
 
-<!-- #region id="t9TmKfCS3Fpx" -->
-## evaluation
-<!-- #endregion -->
+```{python}
+all_loc_mape, all_loc_rmse = mape_rmse_all_location(test_date_location,predict_date_location)
+```
 
 ### plots
 
 ```{python}
 def plot_high_demand_error(all_loc_rmse,all_loc_mape):
     plt.rcParams['figure.figsize'] = (50, 30)
-    index_high_demand = location_labels_df.sum().sort_values(ascending=False).index[:51]
+    index_high_demand = location_labels_df.iloc[:,1:].sum().sort_values(ascending=False).index[:51]
     
     plt.subplot(2,1,1)
-    plt.plot(all_loc_rmse.loc[index_high_demand], linewidth=6)
+    plt.plot(range(1,52), all_loc_rmse.loc[index_high_demand], linewidth=6)
     plt.title('RMSE of High Demand LocationID', fontsize=45)
     plt.ylabel('rmse', fontsize=35)
     plt.xlabel('LocationID', fontsize=35)
@@ -222,7 +183,7 @@ def plot_high_demand_error(all_loc_rmse,all_loc_mape):
     
     
     plt.subplot(2,1,2)
-    plt.plot(all_loc_mape.loc[index_high_demand], color='orange', linewidth=6)
+    plt.plot(range(1,52), all_loc_mape.loc[index_high_demand], color='orange', linewidth=6)
     plt.title('MAPE of High Demand LocationID', fontsize=45)
     plt.ylabel('mape', fontsize=35)
     plt.xlabel('LocationID', fontsize=35)
@@ -238,18 +199,18 @@ plot_high_demand_error(all_loc_rmse, all_loc_mape)
 ```
 
 ```{python}
-def evaluation(test_date_location, predicted_date_location):
-    index_high_demand = location_labels_df.sum().sort_values(ascending=False).index[:51]
-    predicted_data_vec = predicted_date_location[index_high_demand].to_numpy().reshape((1,-1))
+def evaluation(test_date_location, predict_date_location):
+    index_high_demand = location_labels_df.iloc[:,1:].sum().sort_values(ascending=False).index[:51]
+    predict_data_vec = predict_date_location[index_high_demand].to_numpy().reshape((1,-1))
     test_data_vec = test_date_location[index_high_demand].to_numpy().reshape((1,-1))
-    mape_error = mape(test_data_vec,predicted_data_vec)
-    rmse_error = rmse(test_data_vec,predicted_data_vec)
+    mape_error = mape(test_data_vec,predict_data_vec)
+    rmse_error = rmse(test_data_vec,predict_data_vec)
     print(f'mape of high demand locations: {mape_error}')
     print(f'rmse of high demand locations: {rmse_error}')
 ```
 
 ```{python}
-evaluation(test_date_location, predicted_date_location)
+evaluation(test_date_location, predict_date_location)
 ```
 
 # Save file
@@ -257,14 +218,14 @@ evaluation(test_date_location, predicted_date_location)
 ```{python}
 def reshape_output(rides_df, predicted_date_location):
     dataset = rides_df.sort_values(['Date','Location'])[14*262:].reset_index(drop = True)
-    dataset['arima_predicted_demand'] = predicted_date_location.to_numpy().reshape((-1,1))
+    dataset['prophet_predicted_demand'] = predicted_date_location.to_numpy().reshape((-1,1))
     dataset.drop(columns = ['Demand'], inplace = True)
     output_dataset = dataset.sort_values(['Location','Date']).reset_index(drop = True)
     return output_dataset
 ```
 
 ```{python}
-predicted_data = reshape_output(rides_df, predicted_date_location)
+predicted_data = reshape_output(rides_df, predict_date_location)
 print(f'predicted data shape: {predicted_data.shape}')
 predicted_data.head()
 ```
@@ -276,4 +237,8 @@ def save_val_predicted(dataset, path):
 
 ```{python}
 save_val_predicted(predicted_data, OUTPUT_PATH)
+```
+
+```{python}
+
 ```
