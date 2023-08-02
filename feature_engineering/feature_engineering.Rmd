@@ -22,8 +22,7 @@ import pandas as pd
 
 ```{python}
 INPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/labels_phase2.parquet'
-# INPUT_PATH = '/Users/maedeh/Desktop/demand_project/shoofer-demand-prediction/data/labels.parquet'
-# OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/features_df_phase2.parquet'
+OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/features_df_phase2.parquet'
 ```
 
 # Loading Dataset
@@ -37,27 +36,16 @@ def load_data(path):
 ```{python}
 rides_df = load_data(INPUT_PATH)
 print(f'rides_df shape : {rides_df.shape}')
-rides_df[:30]
-```
-
-```{python}
-dd=rides_df.groupby(['Location','Hour_interval'])['Demand'].shift(1)
-rides_df['last_day_of_interval']=dd
-rides_df[1060:1100]
-```
-
-```{python}
-dd=rides_df.groupby(['Location','Date'])['Demand'].shift(120)
+rides_df.head()
 ```
 
 # Feature engineering
 
 ```{python}
 def feature_engineering(dataset):
-    dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
-    dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
-    dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
-    dataset['Day_of_month'] = dataset['Date'].dt.day
+    dataset['previous _interval'] = dataset.groupby(['Location'])['Demand'].shift(1)
+    dataset['previous_day_interval'] = dataset.groupby(['Location'])['Demand'].shift(8)
+    dataset['previous_week_interval'] = dataset.groupby(['Location'])['Demand'].shift(56)
     return dataset
 ```
 
@@ -65,10 +53,6 @@ def feature_engineering(dataset):
 features_df = feature_engineering(rides_df)
 print(f'features_df shape : {features_df.shape}')
 features_df.head()
-```
-
-```{python}
-features_df[114:170]
 ```
 
 # File saving
