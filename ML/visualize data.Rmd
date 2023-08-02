@@ -20,13 +20,11 @@ import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import shap
-import xgboost as xgb
 
+from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
 from sklearn.decomposition import PCA
-import geopandas as gpd
 ```
 
 <!-- #region id="pSSMa3G2wGmF" -->
@@ -39,51 +37,36 @@ ARIMA_PATH = 'statics/arima_predict.parquet'
 OUTPUT_PATH = 'results/xgb_predictions.parquet'
 
 START_DATE = '2023-01-01'
-END_DATE = '2023-05-15'
+END_DATE = '2023-04-30'
 
 FEATURE_LIST = ['ARIMA_predicts',
                 
-                #'Bronx',
-                #'Brooklyn'	,
-                #'EWR'	,
-                #'Manhattan'	,
-                #'Queens'	,
-                #'Staten Island',
-                
-                #'Previous_week_trip_dist',
-                #'Previous_2week_trip_dist',
-                #'Previous_day_trip_dist',
-
-                #'Previous_week_passenger_count',
-                #'Previous_2week_passenger_count',
-                #'Previous_day_passenger_count',
-
-                #'Previous_week_fare_amount',
-                #'Previous_day_fare_amount',
-                #'Previous_2week_fare_amount',
+                'Previous_week_tip_amount',
+                'Previous_2week_tip_amount',
+                'Previous_day_tip_amount',
 
                 'Previous_2week_demand',
                 #'previous_2day_demand',
                 'Previous_week_demand', 
                 'Previous_day_demand',
 
-                #'Previous_week_extra',
+                'Previous_week_extra',
                 #'Previous_2week_extra',
                 #'Previous_day_extra',
                 
                 #'Previous_2week_RatecodeID',
-                #'Previous_week_RatecodeID',
+                'Previous_week_RatecodeID',
                 #'Previous_day_RatecodeID',
 
-                #'Previous_week_congestion_surcharge',
+                'Previous_week_congestion_surcharge',
                 #'Previous_2week_congestion_surcharge',
                 #'Previous_day_congestion_surcharge',
 
                 #'Day_of_month', 
-                'Day_of_week'
+                #'Day_of_week'
                 ]
 
-TEST_START_DATE = '2023-04-20'
+TEST_START_DATE = '2023-04-1'
 
 AUTO_TUNE = False
 ```
@@ -105,7 +88,7 @@ def load_data(path, start_date: str, end_date: str):
     filtered_df = df[(df['tpep_pickup_datetime'].dt.date >= start_date) &
                      (df['tpep_pickup_datetime'].dt.date <= end_date)]
     dataset = filtered_df.filter(items=['tpep_pickup_datetime', 'PULocationID', 'trip_distance', 'total_amount', 'passenger_count', 'fare_amount', 'extra', 
-                                        'RatecodeID', 'congestion_surcharge', 'tip_amount'])
+                                        'RatecodeID', 'congestion_surcharge', 'mta_tax', 'payment_type', 'tip_amount'])
     dataset['PU_date'] = pd.to_datetime(dataset['tpep_pickup_datetime'].dt.date)
     return dataset
 ```
@@ -120,21 +103,12 @@ rides_df.head()
 ```
 
 ```{python}
-arima_df = pd.read_parquet(ARIMA_PATH)
+statics_df = pd.read_parquet(ARIMA_PATH)
 ```
 
 ```{python}
-print(f'statics dataframe shape : {arima_df.shape}')
-arima_df.head()
-```
-
-```{python}
-regions_df = gpd.read_file('taxi_zones/taxi_zones.shp')
-regions_df = regions_df.rename(columns = {'LocationID' : 'Location'})
-```
-
-```{python}
-regions_df['borough']
+print(f'rides dataframe shape : {statics_df.shape}')
+statics_df.head()
 ```
 
 <!-- #region id="X2ES_CY6-fb5" -->
@@ -142,7 +116,7 @@ regions_df['borough']
 <!-- #endregion -->
 
 ```{python id="a7mNMQ-zwGmH"}
-def labeling(dataset, zones):
+def labeling(dataset):
     '''dataset_labels_demand = (
         dataset
         .groupby(['PULocationID', 'PU_date'])['PU_date']
@@ -173,7 +147,6 @@ def labeling(dataset, zones):
     labels_df = (
         location_date_df
         .merge(dataset_labels, how='left', on=['Location', 'Date'])
-        .merge(zones, how='left', on=['Location'])
         .fillna(value=0)
     )
 
@@ -182,22 +155,16 @@ def labeling(dataset, zones):
 ```
 
 ```{python id="VVRLakW_LeGp"}
-labeled_df = labeling(rides_df, regions_df[['borough', 'Location']])
+labeled_df = labeling(rides_df)
 ```
 
 ```{python}
-labeled_df = pd.concat([labeled_df, pd.get_dummies(labeled_df["borough"])], axis=1)
-labeled_df.drop("borough", axis=1, inplace=True)
-labeled_df.drop(0, axis = 1, inplace = True)
+labeled_df.corr()
 ```
 
 ```{python id="0Gm5j5em28Xy"}
 print(f'labeled dataframe shape : {labeled_df.shape}')
 labeled_df.head()
-```
-
-```{python}
-labeled_df.to_parquet('labels.parquet')
 ```
 
 <!-- #region id="G0W2pR-70JJb" -->
@@ -211,21 +178,9 @@ def feature_engineering(dataset, statics_df):
     dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
     dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
 
-    dataset['Previous_week_passenger_count'] = dataset.groupby(['Location'])['passenger_count'].shift(7)
-    dataset['Previous_2week_passenger_count'] = dataset.groupby(['Location'])['passenger_count'].shift(14)
-    dataset['Previous_day_passenger_count'] = dataset.groupby(['Location'])['passenger_count'].shift(1)
-
-    dataset['Previous_week_trip_dist'] = dataset.groupby(['Location'])['trip_dists'].shift(7)
-    dataset['Previous_2week_trip_dist'] = dataset.groupby(['Location'])['trip_dists'].shift(14)
-    dataset['Previous_day_trip_dist'] = dataset.groupby(['Location'])['trip_dists'].shift(1)
-
     dataset['Previous_week_tip_amount'] = dataset.groupby(['Location'])['tip_amount'].shift(7)
     dataset['Previous_2week_tip_amount'] = dataset.groupby(['Location'])['tip_amount'].shift(14)
     dataset['Previous_day_tip_amount'] = dataset.groupby(['Location'])['tip_amount'].shift(1)
-
-    dataset['Previous_week_fare_amount'] = dataset.groupby(['Location'])['fare_amount'].shift(7)
-    dataset['Previous_2week_fare_amount'] = dataset.groupby(['Location'])['fare_amount'].shift(14)
-    dataset['Previous_day_fare_amount'] = dataset.groupby(['Location'])['fare_amount'].shift(1)
 
     dataset['Previous_week_extra'] = dataset.groupby(['Location'])['extra'].shift(7)
     dataset['Previous_2week_extra'] = dataset.groupby(['Location'])['extra'].shift(14)
@@ -255,13 +210,17 @@ def feature_engineering(dataset, statics_df):
 ```
 
 ```{python id="12zNfv8YwGmK"}
-features_df = feature_engineering(labeled_df, arima_df)
+features_df = feature_engineering(labeled_df, statics_df)
 features_df.dropna(inplace = True)
 ```
 
 ```{python id="bJxWEkiD3VOZ"}
 print(f'features dataframe shape : {features_df.shape}')
 features_df.head()
+```
+
+```{python}
+features_df.corr()
 ```
 
 ```{python}
@@ -288,16 +247,9 @@ def train_test_splitting(dataset, TEST_START_DATE):
 
 ```{python id="3xH4VMGNwGmK"}
 train_df, test_df = train_test_splitting(features_df, TEST_START_DATE)
-'''pca = PCA(n_components = 5)
-xtrain = pca.fit_transform(train_df[FEATURE_LIST])
-
-pca = PCA(n_components = 5)
-xtest = pca.fit_transform(test_df[FEATURE_LIST])
-
-pca.fit(features_df[FEATURE_LIST])'''
 ```
 
-```{python id="xxGdRZfqwGmL"}
+```{python id="xxGdRZfqwGmL", outputId="58609337-c472-48f5-c7fc-e9d7c17aba4f"}
 print(f'train dataframe shape : {train_df.shape}')
 train_df.head()
 ```
@@ -311,16 +263,16 @@ test_df.head()
 # Model Training
 <!-- #endregion -->
 
-<!-- #region id="mIhvw9lH92sa" -->
-## **Gradient Boosting Regressor**
+<!-- #region id="PxYfxyCHz_Z3" -->
+## **Ridge Regression**
 <!-- #endregion -->
 
-<!-- #region id="13gFIyYfZyxh" -->
+<!-- #region id="CJn4YIBtKcL_" -->
 ### Model Tuning
 <!-- #endregion -->
 
 ```{python id="sOMPo5ryBm8g"}
-def grid_search(model, test_parameters, train_data, feature_list, cv = None):
+def grid_search(model, test_parameters, train_data, cv = None, feature_list = FEATURE_LIST):
     gs = GridSearchCV(
         estimator = model, 
         param_grid = test_parameters, 
@@ -333,37 +285,20 @@ def grid_search(model, test_parameters, train_data, feature_list, cv = None):
     return gs.best_params_, gs.best_score_
 ```
 
-```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
-if AUTO_TUNE:
-    params_test = {'learning_rate':[0.2, 0.15, 0.1, 0.05], 
-                'subsample':[0.6, 0.7, 0.8, 0.9, 1], 
-                'colsample_bytree':[0.6, 0.7, 0.8, 0.9, 1], 
-                'max_depth':[6, 7, 8], 
-                'min_child_weight':[1, 10, 20, 30, 40, 50],
-                }
-    params = {"objective": "reg:squarederror"}
+```{python}
+model = Ridge()
+best_params, best_score = grid_search(
+    model, 
+    {'alpha':[0, 1, 10, 100, 1000]},
+    train_df, 
+    cv = 5, 
+    feature_list = FEATURE_LIST
+    )
 
-    best_params, best_score = grid_search(
-        model = xgb.XGBRegressor(**params), 
-        test_parameters = params_test,
-        train_data = train_df, 
-        feature_list = FEATURE_LIST, 
-        cv = 3
-        )
-    
-    print(best_params, best_score)
-else:
-    best_params = {'colsample_bytree': 0.45, 
-                   'learning_rate': 0.1, 
-                   'max_depth': 8,
-                   'subsample': 0.6,
-                   'min_child_weight':20,
-                   'n_estimators': 100
-                   }
-    '''{'colsample_bytree': 0.45, 'learning_rate': 0.05, 'max_depth': 7, 'min_child_weight': 20, 'subsample': 0.85}'''
+print(best_params, best_score)
 ```
 
-<!-- #region id="H0IHB8t41NB6" -->
+<!-- #region id="AxN2E_9Q1yHS" -->
 ### Prediction
 <!-- #endregion -->
 
@@ -371,22 +306,20 @@ else:
 def model_predict(model, train_data, test_data, feature_list):
 
     model.fit(train_data[feature_list], train_data['Demand'])
-    '''model.fit(train_data[feature_list], train_data['Demand'], 
-            eval_set=[(test_data[feature_list], test_data['Demand'])], 
-            early_stopping_rounds=100)
-    print(np.min(model.evals_result()['validation_0']['rmse']))'''
+
+
     train_predict_df  = model.predict(train_data[feature_list])
     test_predict_df  = model.predict(test_data[feature_list])
 
     return train_predict_df, test_predict_df
 ```
 
-```{python id="5AdQtdSqN7m9"}
-model = xgb.XGBRegressor(**best_params)
-train_prediction_df, test_prediction_df = model_predict(model, train_df, test_df, FEATURE_LIST)
+```{python id="MulwYZc7LK7v"}
+model = Ridge(**best_params)
+train_prediction_df , test_prediction_df  = model_predict(model, train_df, test_df, FEATURE_LIST)
 ```
 
-<!-- #region id="J0EYl9KtTfo7" -->
+<!-- #region id="jJYHtg2oRqvS" -->
 ### Visualization
 <!-- #endregion -->
 
@@ -406,6 +339,7 @@ def add_day_of_year(data):
 
 ```{python id="ao6nw8xsRvB9"}
 def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
+
 
     train_data = add_day_of_year(train_data)
     test_data = add_day_of_year(test_data)
@@ -434,11 +368,11 @@ def prediction_visualization(train_data, test_data, train_prediction_df, test_pr
     plt.show()
 ```
 
-```{python id="deyLWLmZThMJ", outputId="4d0094aa-099c-490f-aa82-281ee16bae01"}
+```{python colab={'base_uri': 'https://localhost:8080/', 'height': 887}, id="gOyNantNRtda", outputId="dc7796cf-c196-421d-bd56-1d312334dee4"}
 prediction_visualization(train_df, test_df, train_prediction_df, test_prediction_df)
 ```
 
-<!-- #region id="lERphf0kTist" -->
+<!-- #region id="RBsqB5hnSuPP" -->
 ### Evaluation
 <!-- #endregion -->
 
@@ -447,54 +381,25 @@ def evaluate(metric, metric_name, true_values, predicted_values):
     print(f'{metric_name} : {metric(true_values, predicted_values)}')
 ```
 
-```{python}
-def smape(y_true, y_pred):
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    numerator = np.abs(y_pred - y_true)
-    denominator = (np.abs(y_true) + np.abs(y_pred))
-    smape = np.mean(numerator / denominator)
-    return smape * 100
-```
-
 ```{python id="v4-GWghuSbnA"}
-def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df):
+def evaluation(model_name, train_data, test_data, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
 
 
-    evaluate(mean_absolute_error, 'MAE', train_df['Demand'], train_prediction_df)
-    evaluate(mean_squared_error, 'MSE', train_df['Demand'], train_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', train_df['Demand'], train_prediction_df)
-    evaluate(smape, 'smape', train_df['Demand'], train_prediction_df)
+    evaluate(mean_absolute_error, 'MAE', train_data['Demand'], train_prediction_df)
+    evaluate(mean_squared_error, 'MSE', train_data['Demand'], train_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', train_data['Demand'], train_prediction_df)
 
     print(f'{model_name} test scores:')
 
-    evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
-    evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
-    evaluate(smape, 'smape', test_df['Demand'], test_prediction_df)
+    evaluate(mean_absolute_error, 'MAE', test_data['Demand'], test_prediction_df)
+    evaluate(mean_squared_error, 'MSE', test_data['Demand'], test_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', test_data['Demand'], test_prediction_df)
 
 ```
 
-```{python id="qSZwIFprTkqK", outputId="7ae94952-ec22-410a-9d26-6e05a96af6ab"}
-evaluation('XGB', train_df, test_df, train_prediction_df, test_prediction_df)
-```
-
-<!-- #region id="_286hlGi7VWD" -->
-### Feature Importance and SHAPE
-<!-- #endregion -->
-
-```{python id="osueYsNP1NB8", outputId="b3c13ee6-bd74-4470-a8c5-558df5416e28"}
-xgb.plot_importance(model)
-plt.show()
-```
-
-```{python id="50CEqbp75Y_i", outputId="b7288f1d-517a-4707-da22-ad996453f161"}
-'''dtrain_reg = xgb.DMatrix(train_df[FEATURE_LIST].values, train_df['Demand'].values, enable_categorical=True)
-
-explainer = shap.TreeExplainer(model)
-shap_values = explainer.shap_values(dtrain_reg)
-shap.summary_plot(shap_values, train_df[FEATURE_LIST])'''
+```{python colab={'base_uri': 'https://localhost:8080/'}, id="vUBqNgIwSwKe", outputId="c05d64b8-b525-458d-96db-757e94a57d89"}
+evaluation('Ridge Regression', train_df, test_df, train_prediction_df, test_prediction_df)
 ```
 
 # File Saving
