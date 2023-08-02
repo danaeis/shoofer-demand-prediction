@@ -32,18 +32,23 @@ from sklearn.model_selection import GridSearchCV
 
 ```{python id="zIkDLK9zwGmG"}
 INPUT_PATH = 'datasets/'
-STATICS_PATH = 'statics/'
-OUTPUT_PATH = 'results/ridge_predictions.parquet'
+ARIMA_PATH = 'statics/arima_predict.parquet'
+OUTPUT_PATH = 'results/xgb_predictions.parquet'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-FEATURE_LIST = ['ARIMA_predicts', 
+FEATURE_LIST = [#'ARIMA_predicts',
+                'Previous_week_trip_dist',
                 'Previous_2week_demand',
+                'previous_2day_demand',
                 'Previous_week_demand', 
-                'Previous_day_demand', 
-                'Day_of_month', 
-                'Day_of_week']
+                'Previous_day_demand',
+                'Previous_2week_trip_dist',
+                'previous_2day_trip_dist',
+                #'Day_of_month', 
+                #'Day_of_week'
+                ]
 
 TEST_START_DATE = '2023-04-1'
 
@@ -66,7 +71,7 @@ def load_data(path, start_date: str, end_date: str):
     end_date = datetime.date.fromisoformat(end_date)
     filtered_df = df[(df['tpep_pickup_datetime'].dt.date >= start_date) &
                      (df['tpep_pickup_datetime'].dt.date <= end_date)]
-    dataset = filtered_df.filter(items=['tpep_pickup_datetime', 'PULocationID'])
+    dataset = filtered_df.filter(items=['tpep_pickup_datetime', 'PULocationID', 'trip_distance'])
     dataset['PU_date'] = pd.to_datetime(dataset['tpep_pickup_datetime'].dt.date)
     return dataset
 ```
@@ -81,7 +86,7 @@ rides_df.head()
 ```
 
 ```{python}
-statics_df = pd.read_parquet(STATICS_PATH)
+statics_df = pd.read_parquet(ARIMA_PATH)
 ```
 
 ```{python}
@@ -95,7 +100,7 @@ statics_df.head()
 
 ```{python id="a7mNMQ-zwGmH"}
 def labeling(dataset):
-    dataset_labels = (
+    dataset_labels_demand = (
         dataset
         .groupby(['PULocationID', 'PU_date'])['PU_date']
         .count()
@@ -105,8 +110,18 @@ def labeling(dataset):
         .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
     )
 
-    locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
-    dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
+    dataset_labels_trip = (
+        dataset
+        .groupby(['PULocationID', 'PU_date'])['trip_distance']
+        .sum()
+        .to_frame('trip_dist_sums')
+        .sort_values(['PULocationID', 'PU_date'], ascending=[True, True])
+        .reset_index()
+        .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
+    )
+
+    locations = pd.DataFrame(dataset_labels_demand['Location'].unique(), columns=['Location'])
+    dates = pd.DataFrame(dataset_labels_demand['Date'].unique(), columns=['Date'])
 
     location_date_df = (
         locations
@@ -117,7 +132,8 @@ def labeling(dataset):
 
     labels_df = (
         location_date_df
-        .merge(dataset_labels, how='left', on=['Location', 'Date'])
+        .merge(dataset_labels_demand, how='left', on=['Location', 'Date'])
+        .merge(dataset_labels_trip, how='left', on=['Location', 'Date'])
         .fillna(value=0)
     )
 
@@ -141,8 +157,13 @@ labeled_df.head()
 ```{python id="ifvk6uWS6hnT"}
 def feature_engineering(dataset, statics_df):
     dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
+    dataset['previous_2day_demand'] = dataset.groupby(['Location'])['Demand'].shift(2)
     dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
     dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
+    dataset['Previous_week_trip_dist'] = dataset.groupby(['Location'])['trip_dist_sums'].shift(7)
+    dataset['Previous_2week_trip_dist'] = dataset.groupby(['Location'])['trip_dist_sums'].shift(14)
+    dataset['previous_2day_trip_dist'] = dataset.groupby(['Location'])['trip_dist_sums'].shift(2)
+
 
     dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
     dataset['Day_of_month'] = dataset['Date'].dt.day
@@ -225,7 +246,7 @@ def grid_search(model, test_parameters, train_data, cv = None, feature_list = FE
 model = Ridge()
 best_params, best_score = grid_search(
     model, 
-    {'alpha':[661000,661200, 661400, 661600, 661800, 662000]},
+    {'alpha':[0, 1]},
     train_df, 
     cv = 5, 
     feature_list = FEATURE_LIST
