@@ -333,6 +333,17 @@ def calculate_error(actual_predicted_dict: dict):
 
 ```{python}
 calculate_error(predictions_dict)
+
+```
+
+```{python}
+print(predictions_dict['baseline_last_week'].shape)
+predictions_dict['baseline_last_week'].head()
+# predictions_dict['baseline_last_week'].tail()
+```
+
+```{python}
+print(predictions_dict['model_regression'].shape)
 predictions_dict['model_regression'].head()
 ```
 
@@ -400,7 +411,23 @@ calculate_maen_error(predictions_dict, predictions_mean_error_dict)
 ```
 
 ```{python}
-predictions_mean_error_dict['baseline_last_week']['Date']['mid_demand_loc'].head()
+print(predictions_mean_error_dict['baseline_last_week']['Date']['mid_demand_loc'].shape)
+predictions_mean_error_dict['baseline_last_week']['Date']['mid_demand_loc'].tail()
+```
+
+```{python}
+print(predictions_mean_error_dict['baseline_last_week']['Location']['mid_demand_loc'].shape)
+predictions_mean_error_dict['baseline_last_week']['Location']['mid_demand_loc'].tail()
+```
+
+```{python}
+print(predictions_mean_error_dict['model_regression']['Date']['mid_demand_loc'].shape)
+predictions_mean_error_dict['model_regression']['Date']['mid_demand_loc'].tail()
+```
+
+```{python}
+print(predictions_mean_error_dict['model_regression']['Location']['mid_demand_loc'].shape)
+predictions_mean_error_dict['model_regression']['Location']['mid_demand_loc'].tail()
 ```
 
 ### Plot Mape for Models Predicted Demands
