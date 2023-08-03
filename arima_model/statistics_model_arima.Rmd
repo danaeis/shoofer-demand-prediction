@@ -95,9 +95,9 @@ train_size_ratio = 0.12
 
 ```{python id="QWWSsvJwVWaR"}
 def split_data(location_labels_df, location, train_size_ratio):
-    train_end_date = int(len(location_labels_df) * train_size_ratio)
-    train_data = location_labels_df.loc[0:train_end_date, location]
-    test_data = location_labels_df.loc[train_end_date:, location]
+    size = int(len(location_labels_df) * train_size_ratio)
+    train_data = location_labels_df.loc[0:size, location]
+    test_data = location_labels_df.loc[size:, location]
     return (train_data, test_data)
 ```
 
@@ -146,8 +146,8 @@ def predict_all_location(location_labels_df, train_size_ratio):
 
     all_loc_rmse = []
     all_loc_mape = []
-    predicted_date_location = {}
-    test_date_location = {}
+    predicted_data_all_loc = {}
+    test_data_all_loc = {}
     fitted_data_all_loc = {}
     column = location_labels_df.columns
     
@@ -156,8 +156,8 @@ def predict_all_location(location_labels_df, train_size_ratio):
         train_data, test_data = split_data (location_labels_df, loc, train_size_ratio)
         result = arima_forecast(train_data, test_data)
                 
-        test_date_location[loc] = result[0]
-        predicted_date_location[loc] = result[1]
+        test_data_all_loc[loc] = result[0]
+        predicted_data_all_loc[loc] = result[1]
         fitted_data_all_loc[loc] = result[2]
         
         val_rmse = rmse (result[0], result[1])
@@ -169,14 +169,19 @@ def predict_all_location(location_labels_df, train_size_ratio):
     all_loc_mape = pd.DataFrame(all_loc_mape, index=column , columns= ['mape'])
     all_loc_rmse = pd.DataFrame(all_loc_rmse)
     all_loc_mape = pd.DataFrame(all_loc_mape)
-    test_date_location = pd.DataFrame(test_date_location)
+    test_data_all_loc = pd.DataFrame(test_data_all_loc)
     fitted_data_all_loc = pd.DataFrame(fitted_data_all_loc)
-    predicted_date_location = pd.DataFrame(predicted_date_location)
-    return (test_date_location, predicted_date_location, fitted_data_all_loc, all_loc_rmse, all_loc_mape)
+    predicted_data_all_loc = pd.DataFrame(predicted_data_all_loc)
+    return (test_data_all_loc, predicted_data_all_loc, fitted_data_all_loc, all_loc_rmse, all_loc_mape)
 ```
 
 ```{python}
-test_date_location, predicted_date_location, fitted_data_all_loc, all_loc_rmse, all_loc_mape = predict_all_location(location_labels_df, train_size_ratio)
+test_data_all_loc, predicted_data_all_loc, fitted_data_all_loc, all_loc_rmse, all_loc_mape = predict_all_location(location_labels_df, train_size_ratio)
+```
+
+```{python}
+print(f'predicted_data_all_loc shape : {predicted_data_all_loc.shape}')
+predicted_data_all_loc.head()
 ```
 
 <!-- #region id="t9TmKfCS3Fpx" -->
@@ -216,10 +221,10 @@ plot_high_demand_error(all_loc_rmse, all_loc_mape)
 ```
 
 ```{python}
-def evaluation(test_date_location, predicted_date_location):
+def evaluation(test_data_all_loc, predicted_data_all_loc):
     index_high_demand = location_labels_df.sum().sort_values(ascending=False).index[:51]
-    predicted_data_vec = predicted_date_location[index_high_demand].to_numpy().reshape((1,-1))
-    test_data_vec = test_date_location[index_high_demand].to_numpy().reshape((1,-1))
+    predicted_data_vec = predicted_data_all_loc[index_high_demand].to_numpy().reshape((1,-1))
+    test_data_vec = test_data_all_loc[index_high_demand].to_numpy().reshape((1,-1))
     mape_error = mape(test_data_vec,predicted_data_vec)
     rmse_error = rmse(test_data_vec,predicted_data_vec)
     print(f'mape of high demand locations: {mape_error}')
@@ -227,25 +232,10 @@ def evaluation(test_date_location, predicted_date_location):
 ```
 
 ```{python}
-evaluation(test_date_location, predicted_date_location)
+evaluation(test_data_all_loc, predicted_data_all_loc)
 ```
 
 # Save file
-
-```{python}
-def reshape_output(rides_df, predicted_date_location):
-    dataset = rides_df.sort_values(['Date','Location'])[14*262:].reset_index(drop = True)
-    dataset['arima_predicted_demand'] = predicted_date_location.to_numpy().reshape((-1,1))
-    dataset.drop(columns = ['Demand'], inplace = True)
-    output_dataset = dataset.sort_values(['Location','Date']).reset_index(drop = True)
-    return output_dataset
-```
-
-```{python}
-predicted_data = reshape_output(rides_df, predicted_date_location)
-print(f'predicted data shape: {predicted_data.shape}')
-predicted_data.head()
-```
 
 ```{python}
 def save_val_predicted(dataset, path):
@@ -253,9 +243,5 @@ def save_val_predicted(dataset, path):
 ```
 
 ```{python}
-save_val_predicted(predicted_data, OUTPUT_PATH)
-```
-
-```{python}
-
+save_val_predicted(predicted_data_all_loc, OUTPUT_PATH)
 ```
