@@ -224,6 +224,7 @@ labeled_df.head()
 ```{python}
 test_df = labeled_df.loc[labeled_df['Date']>=TEST_START_DATE]
 test_df = test_df.reset_index(drop = True)
+print(test_df.shape)
 test_df.head()
 ```
 
@@ -231,11 +232,13 @@ test_df.head()
 
 ```{python}
 predictions_dict['model_xgboost'] = pd.read_parquet(PREDICTED_XGB_ARIMA_PATH)
+print(predictions_dict['model_xgboost'].shape)
 predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
 predictions_dict['model_regression'] = pd.read_parquet(PREDICTED_REGRESSION_PATH)
+print(predictions_dict['model_regression'].shape)
 predictions_dict['model_regression'].head()
 ```
 
@@ -251,31 +254,35 @@ def baseline_predict(dataset, shift_val):
 
 ```{python}
 predictions_dict['baseline_last_week'] = baseline_predict(test_df, 7)
+# predictions_dict['baseline_last_week'] = predictions_dict['baseline_last_week'].dropna()
+print(predictions_dict['baseline_last_week'].shape)
+predictions_dict['baseline_last_week'].head()
 ```
 
 ### Join Predictions and Actual
 
 ```{python}
 def join_actual_predict(actual_df, predicted_df):
-    actual_predicted_df = actual_df.copy()
-    actual_predicted_df['Predicted_demand'] = predicted_df['Predicted_demand']
-    actual_predicted_df = actual_predicted_df.dropna()
+    actual_predicted_df = actual_df.merge(predicted_df, how='inner', on=['Location', 'Date'])
     actual_predicted_df['day_of_week'] = actual_predicted_df['Date'].dt.dayofweek
     return actual_predicted_df
 ```
 
 ```{python}
 predictions_dict['baseline_last_week'] = join_actual_predict(test_df,predictions_dict['baseline_last_week'])
+print(predictions_dict['baseline_last_week'].shape)
 predictions_dict['baseline_last_week'].head()
 ```
 
 ```{python}
 predictions_dict['model_regression'] = join_actual_predict(test_df,predictions_dict['model_regression'])
+print(predictions_dict['model_regression'].shape)
 predictions_dict['model_regression'].head()
 ```
 
 ```{python}
 predictions_dict['model_xgboost'] = join_actual_predict(test_df,predictions_dict['model_xgboost'])
+print(predictions_dict['model_xgboost'].shape)
 predictions_dict['model_xgboost'].head()
 ```
 
@@ -292,7 +299,14 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
 
 ```{python}
 sort_locations_on_demand(predictions_dict, sorted_locations_dict)
+print(sorted_locations_dict['model_xgboost'].shape)
 sorted_locations_dict['model_xgboost'].head()
+```
+
+```{python}
+sort_locations_on_demand(predictions_dict, sorted_locations_dict)
+print(sorted_locations_dict['baseline_last_week'].shape)
+sorted_locations_dict['baseline_last_week'].head()
 ```
 
 # Mean error Calculation
@@ -386,7 +400,7 @@ calculate_maen_error(predictions_dict, predictions_mean_error_dict)
 ```
 
 ```{python}
-predictions_mean_error_dict['baseline_last_week']['Location']['high_demand_loc'].head()
+predictions_mean_error_dict['baseline_last_week']['Date']['mid_demand_loc'].head()
 ```
 
 ### Plot Mape for Models Predicted Demands
