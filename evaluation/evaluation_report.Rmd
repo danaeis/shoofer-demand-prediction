@@ -283,7 +283,7 @@ predictions_dict['model_catboost'].head()
 ```
 
 ```{python}
-predictions_dict['model_regression'] = pd.read_parquet(PREDICTED_CB_PATH)
+predictions_dict['model_regression'] = pd.read_parquet(PREDICTED_REGRESSION_PATH)
 print(predictions_dict['model_regression'].shape)
 predictions_dict['model_regression'].head()
 ```
@@ -684,7 +684,7 @@ report_df = report_df.T
 
 ```{python}
 df = pd.DataFrame(report_df,
-                  index=pd.Index(['baseline_last_week', 'model_regression', 'model_xgboost']),
+                  index=pd.Index(report_df.index),
                   columns=pd.MultiIndex.from_product([['high_demand_locations', 'mid_demand_locations', 'low_demand_locations', 'all_locations'],
                                                       ['MAPE','MAE','RMSE']], names=['location category:', 'Error Metrics:']))
 
@@ -696,8 +696,4 @@ df
 
 ```{python}
 df.style.format('{:.2f}')
-```
-
-```{python}
-
 ```
