@@ -254,7 +254,7 @@ def baseline_predict(dataset, shift_val):
 
 ```{python}
 predictions_dict['baseline_last_week'] = baseline_predict(test_df, 7)
-# predictions_dict['baseline_last_week'] = predictions_dict['baseline_last_week'].dropna()
+predictions_dict['baseline_last_week'] = predictions_dict['baseline_last_week'].dropna()
 print(predictions_dict['baseline_last_week'].shape)
 predictions_dict['baseline_last_week'].head()
 ```
@@ -263,7 +263,7 @@ predictions_dict['baseline_last_week'].head()
 
 ```{python}
 def join_actual_predict(actual_df, predicted_df):
-    actual_predicted_df = actual_df.merge(predicted_df, how='inner', on=['Location', 'Date'])
+    actual_predicted_df = actual_df.merge(predicted_df, how='outer', on=['Location', 'Date'])
     actual_predicted_df['day_of_week'] = actual_predicted_df['Date'].dt.dayofweek
     return actual_predicted_df
 ```
@@ -339,7 +339,11 @@ calculate_error(predictions_dict)
 ```{python}
 print(predictions_dict['baseline_last_week'].shape)
 predictions_dict['baseline_last_week'].head()
-# predictions_dict['baseline_last_week'].tail()
+
+```
+
+```{python}
+predictions_dict['baseline_last_week'].tail()
 ```
 
 ```{python}
