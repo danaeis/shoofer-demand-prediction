@@ -4,3 +4,5 @@
 
 datasets/
 results/
+catboost_info/
+data/
