@@ -18,13 +18,14 @@ jupyter:
 import datetime
 import numpy as np
 import pandas as pd
+
 ```
 
 # Config
 
 ```{python}
 INPUT_PATH = 'ride_data/'
-OUTPUT_PATH = 'data/labels.parquet'
+OUTPUT_PATH = 'result/labels.parquet'
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 ```
@@ -52,33 +53,48 @@ rides_df.head()
 # Labeling
 
 ```{python}
+def extract_hours(dataset):
+    dataset = dataset.sort_values('tpep_pickup_datetime')
+    dataset['hour'] = dataset['tpep_pickup_datetime'].dt.hour
+    
+    bins = [0, 3, 6, 9, 12, 15, 18, 21, 24]
+    dataset['time_of_day'] = pd.cut(dataset['hour'], bins=bins, labels=bins[:-1], include_lowest=True)
+    dataset = dataset.reset_index(drop = True)
+    return dataset
+```
+
+```{python}
 def labeling(dataset):
+    dataset = extract_hours(dataset)
+    
     dataset_labels = (
         dataset
-        .groupby(['PULocationID', 'PU_date'])['PU_date']
+        .groupby(['PULocationID', 'PU_date', 'time_of_day'])['time_of_day']
         .count()
         .to_frame('Demand')
-        .sort_values(['PULocationID', 'PU_date'], ascending=[True, True])
+        .sort_values(['PULocationID', 'PU_date', 'time_of_day'], ascending=[True, True, True])
         .reset_index()
-        .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
+        .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date', 'time_of_day' : 'Time'})
     )
-  
+
     locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
     dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
-    
-    location_date_df = (
+    times = pd.DataFrame(dataset_labels['Time'].unique(), columns=['Time'])
+
+    location_date_time_df = (
         locations
         .merge(dates, how='cross')
-        .sort_values(['Location', 'Date'], ascending=[True, True])
+        .merge(times, how='cross')
+        .sort_values(['Location', 'Date', 'Time'], ascending=[True, True, True])
         .reset_index(drop=True)
     )
-    
+
     labels_df = (
-        location_date_df
-        .merge(dataset_labels, how='left', on=['Location', 'Date'])
+        location_date_time_df
+        .merge(dataset_labels, how='left', on=['Location', 'Date', 'Time'])
         .fillna(value=0)
     )
-    
+
     return labels_df
 ```
 
