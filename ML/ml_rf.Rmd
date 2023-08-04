@@ -132,15 +132,6 @@ rides_df.head()
 ```
 
 ```{python}
-arima_df = pd.read_parquet(ARIMA_PATH)
-```
-
-```{python}
-print(f'statics dataframe shape : {arima_df.shape}')
-arima_df.head()
-```
-
-```{python}
 ridge_train_df = pd.read_parquet(RIDGE_TRAIN_PATH)
 ridge_test_df = pd.read_parquet(RIDGE_TEST_PATH)
 ridge_df = pd.concat([ridge_train_df, ridge_test_df], axis = 0)
@@ -171,13 +162,6 @@ def labeling(dataset, zones):
         .reset_index()
         .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
     )
-    '''dataset_labels = (
-                rides_df.groupby(['PULocationID', 'PU_date'])
-                .agg({'trip_distance': 'sum', 'tpep_pickup_datetime': 'count', 'total_amount': 'max', 'passenger_count': 'median' ,'fare_amount': 'max', 'extra': 'max',
-                      'RatecodeID': 'max', 'congestion_surcharge': 'median', 'tip_amount': 'sum'})
-                .reset_index()
-                .rename(columns={'trip_distance': 'trip_dists', 'tpep_pickup_datetime': 'Demand', 'PULocationID': 'Location', 'PU_date': 'Date'})
-)'''
 
     locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
     dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
@@ -193,11 +177,6 @@ def labeling(dataset, zones):
         location_date_df
         .merge(dataset_labels, how='left', on=['Location', 'Date'])
         .fillna(value=0)
-    )
-    labels_df = (
-        labels_df
-        .merge(zones, how='left', on=['Location'])
-        .fillna(value=-1.0)
     )
     return labels_df
 
@@ -358,7 +337,7 @@ if AUTO_TUNE:
 else:
     best_params = {
         'bootstrap': True, 
-        'max_depth': 14, 
+        'max_depth': 8, 
         'max_features': 0.7, 
         'min_samples_leaf': 10,
         'n_estimators': 300, 
@@ -384,10 +363,6 @@ def model_predict(model, train_data, test_data, feature_list):
 ```{python id="5AdQtdSqN7m9"}
 model = RandomForestRegressor(**best_params)
 train_prediction_df, test_prediction_df = model_predict(model, train_df, test_df, FEATURE_LIST)
-```
-
-```{python}
-model.oob_score_
 ```
 
 <!-- #region id="J0EYl9KtTfo7" -->
@@ -483,10 +458,6 @@ def evaluation(model_name, train_df, test_df, train_prediction_df, test_predicti
 ```{python id="qSZwIFprTkqK", outputId="7ae94952-ec22-410a-9d26-6e05a96af6ab"}
 evaluation('Random Forest', train_df, test_df, train_prediction_df, test_prediction_df)
 ```
-
-<!-- #region id="_286hlGi7VWD" -->
-### Feature Importance and SHAPE
-<!-- #endregion -->
 
 # File Saving
 

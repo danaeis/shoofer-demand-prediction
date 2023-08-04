@@ -29,11 +29,11 @@ LABELED_PATH = "data/results/labels.parquet"
 PREDICTED_XGB_PATH = "data/results/xgb_predictions.parquet"
 PREDICTED_RF_PATH = "data/results/rf_predictions.parquet"
 PREDICTED_RIDGE_PATH = "data/results/ridge_test_predictions.parquet"
-PREDICTED_ARIMA_PATH = "data/results/arima_predict.parquet"
+PREDICTED_VOTING_PATH = "data/results/voting_predictions.parquet"
 TEST_START_DATE = '2023-04-01'
 TEST_START_DATE_BASE_LINE = '2023-03-25'
-HIGH_DEMAND_NUMS = 50
-MID_DEMAND_NUMS = 100
+HIGH_DEMAND_NUMS = 14
+MID_DEMAND_NUMS = 26
 SAVE_PLOT_PATH = 'data/pngs/'
 warnings.filterwarnings('ignore')
 ```
@@ -45,19 +45,22 @@ report_dict = {
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         }
         
     },
@@ -66,19 +69,22 @@ report_dict = {
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         }
         
     },    
@@ -87,19 +93,22 @@ report_dict = {
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         }
         
     },
@@ -108,19 +117,22 @@ report_dict = {
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None
+            'model_ridge':None,
+            'model_voting':None
         }
     },
     
@@ -134,7 +146,8 @@ predictions_dict = {
     'baseline_last_week':None,
     'model_rf':None,
     'model_xgboost':None,
-    'model_ridge':None
+    'model_ridge':None,
+    'model_voting':None
 }
 ```
 
@@ -143,7 +156,8 @@ sorted_locations_dict={
     'baseline_last_week':None,
     'model_rf':None,
     'model_xgboost':None,
-    'model_ridge':None
+    'model_ridge':None,
+    'model_voting':None
 }
 ```
 
@@ -246,6 +260,30 @@ predictions_mean_error_dict={
                 'all_loc':None
                 }
     },
+    'model_voting':
+    {
+        'Location':
+                {
+                'high_demand_loc':None,
+                'mid_demand_loc':None,
+                'low_demand_loc':None,
+                'all_loc':None
+                },
+        'Date':
+                {
+                'high_demand_loc':None,
+                'mid_demand_loc':None,
+                'low_demand_loc':None,
+                'all_loc':None
+                },
+        'day_of_week':
+                {
+                'high_demand_loc':None,
+                'mid_demand_loc':None,
+                'low_demand_loc':None,
+                'all_loc':None
+                }
+    },
 }
 ```
 
@@ -267,6 +305,10 @@ print(test_df.shape)
 test_df.head()
 ```
 
+```{python}
+test_df
+```
+
 ## Load Predicted Data
 
 ```{python}
@@ -285,6 +327,21 @@ predictions_dict['model_ridge'].head()
 predictions_dict['model_rf'] = pd.read_parquet(PREDICTED_RF_PATH)
 print(predictions_dict['model_rf'].shape)
 predictions_dict['model_rf'].head()
+```
+
+```{python}
+predictions_dict['model_voting'] = pd.read_parquet(PREDICTED_VOTING_PATH)
+print(predictions_dict['model_voting'].shape)
+predictions_dict['model_voting'].head()
+```
+
+```{python}
+pd.concat(
+    [predictions_dict['model_voting']['Predicted_demand'], 
+    predictions_dict['model_rf']['Predicted_demand'],
+    predictions_dict['model_ridge']['Predicted_demand'],
+    predictions_dict['model_xgboost']['Predicted_demand']], axis = 1
+    )
 ```
 
 ### BaseLine Models
@@ -342,6 +399,12 @@ predictions_dict['model_xgboost'].head()
 predictions_dict['model_rf'] = join_actual_predict(test_df,predictions_dict['model_rf'])
 print(predictions_dict['model_rf'].shape)
 predictions_dict['model_rf'].head()
+```
+
+```{python}
+predictions_dict['model_voting'] = join_actual_predict(test_df,predictions_dict['model_voting'])
+print(predictions_dict['model_voting'].shape)
+predictions_dict['model_voting'].head()
 ```
 
 ### Sort Locations by Demand

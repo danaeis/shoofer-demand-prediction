@@ -97,7 +97,7 @@ FEATURE_LIST = [#'ARIMA_predicts',
 
 TEST_START_DATE = '2023-04-01'
 
-AUTO_TUNE = True
+AUTO_TUNE = False
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -128,15 +128,6 @@ rides_df = load_data(INPUT_PATH, START_DATE, END_DATE)
 ```{python id="hCN-11QT3bp1"}
 print(f'rides dataframe shape : {rides_df.shape}')
 rides_df.head()
-```
-
-```{python}
-arima_df = pd.read_parquet(ARIMA_PATH)
-```
-
-```{python}
-print(f'statics dataframe shape : {arima_df.shape}')
-arima_df.head()
 ```
 
 ```{python}
@@ -174,13 +165,6 @@ def labeling(dataset, zones):
         .reset_index()
         .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
     )
-    '''dataset_labels = (
-                rides_df.groupby(['PULocationID', 'PU_date'])
-                .agg({'trip_distance': 'sum', 'tpep_pickup_datetime': 'count', 'total_amount': 'max', 'passenger_count': 'median' ,'fare_amount': 'max', 'extra': 'max',
-                      'RatecodeID': 'max', 'congestion_surcharge': 'median', 'tip_amount': 'sum'})
-                .reset_index()
-                .rename(columns={'trip_distance': 'trip_dists', 'tpep_pickup_datetime': 'Demand', 'PULocationID': 'Location', 'PU_date': 'Date'})
-)'''
 
     locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
     dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
@@ -196,11 +180,6 @@ def labeling(dataset, zones):
         location_date_df
         .merge(dataset_labels, how='left', on=['Location', 'Date'])
         .fillna(value=0)
-    )
-    labels_df = (
-        labels_df
-        .merge(zones, how='left', on=['Location'])
-        .fillna(value=-1.0)
     )
     return labels_df
 

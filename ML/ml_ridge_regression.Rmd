@@ -23,6 +23,7 @@ import pandas as pd
 
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV
 ```
 
@@ -123,15 +124,6 @@ print(f'rides dataframe shape : {rides_df.shape}')
 rides_df.head()
 ```
 
-```{python}
-statics_df = pd.read_parquet(ARIMA_PATH)
-```
-
-```{python}
-print(f'rides dataframe shape : {statics_df.shape}')
-statics_df.head()
-```
-
 <!-- #region id="X2ES_CY6-fb5" -->
 ## Labeling
 <!-- #endregion -->
@@ -193,7 +185,7 @@ labeled_df.head()
 <!-- #endregion -->
 
 ```{python id="ifvk6uWS6hnT"}
-def feature_engineering(dataset, statics_df):
+def feature_engineering(dataset):
     dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
     dataset['Previous_2day_demand'] = dataset.groupby(['Location'])['Demand'].shift(2)
     dataset['Previous_3day_demand'] = dataset.groupby(['Location'])['Demand'].shift(3)
@@ -212,20 +204,12 @@ def feature_engineering(dataset, statics_df):
 
     dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
     dataset['Day_of_month'] = dataset['Date'].dt.day
-
-    dataset = dataset.sort_values(by = ['Date', 'Location'])
-    dataset['ARIMA_predicts'] = None
-    start_index = len(dataset) - len(statics_df)
-    end_index = len(dataset)
-    dataset.iloc[start_index:end_index, dataset.columns.get_loc('ARIMA_predicts')] = statics_df
-    dataset['ARIMA_predicts'] = dataset['ARIMA_predicts'].astype('float')
-    dataset = dataset.sort_values(by = ['Location', 'Date'])
     
     return dataset
 ```
 
 ```{python id="12zNfv8YwGmK"}
-features_df = feature_engineering(labeled_df, statics_df)
+features_df = feature_engineering(labeled_df)
 features_df.dropna(inplace = True)
 ```
 
