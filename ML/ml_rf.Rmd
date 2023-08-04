@@ -171,13 +171,6 @@ def labeling(dataset, zones):
         .reset_index()
         .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
     )
-    '''dataset_labels = (
-                rides_df.groupby(['PULocationID', 'PU_date'])
-                .agg({'trip_distance': 'sum', 'tpep_pickup_datetime': 'count', 'total_amount': 'max', 'passenger_count': 'median' ,'fare_amount': 'max', 'extra': 'max',
-                      'RatecodeID': 'max', 'congestion_surcharge': 'median', 'tip_amount': 'sum'})
-                .reset_index()
-                .rename(columns={'trip_distance': 'trip_dists', 'tpep_pickup_datetime': 'Demand', 'PULocationID': 'Location', 'PU_date': 'Date'})
-)'''
 
     locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
     dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
@@ -193,11 +186,6 @@ def labeling(dataset, zones):
         location_date_df
         .merge(dataset_labels, how='left', on=['Location', 'Date'])
         .fillna(value=0)
-    )
-    labels_df = (
-        labels_df
-        .merge(zones, how='left', on=['Location'])
-        .fillna(value=-1.0)
     )
     return labels_df
 
