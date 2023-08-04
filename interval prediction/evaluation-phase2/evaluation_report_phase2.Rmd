@@ -35,8 +35,7 @@ PREDICTED_XGB_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofe
 # PREDICTED_ARIMA_PATH = "../data/results/arima_predict.parquet"
 TEST_START_DATE = '2023-04-01'
 LAST_WEEK_TEST_START_DATE = '2023-03-25'
-TEST_START_DATE = datetime.datetime.strptime(TEST_START_DATE, '%Y-%m-%d').date()
-LAST_WEEK_TEST_START_DATE = datetime.datetime.strptime(LAST_WEEK_TEST_START_DATE, '%Y-%m-%d').date()
+
 HIGH_DEMAND_NUMS = 50
 MID_DEMAND_NUMS = 100
 SAVE_PLOT_PATH = '/Users/maedeh/Desktop/data/pngs/'
@@ -289,7 +288,6 @@ predictions_mean_error_dict={
 
 ```{python}
 labeled_df = pd.read_parquet(LABELED_PATH)
-# labeled_df['Date'] = pd.to_datetime(labeled_df['Date'])
 print(labeled_df.shape)
 labeled_df.head()
 ```
@@ -710,7 +708,7 @@ df
 ```
 
 ```{python}
-df.style.format('{:.2f}')
+# df.style.format('{:.2f}')
 ```
 
 ```{python}
