@@ -61,8 +61,13 @@ FEATURE_LIST = [#'ARIMA_predicts',
                 # 'Previous_week_fare_amount',
                 # 'Previous_day_fare_amount',
                 # 'Previous_2week_fare_amount',
+
                 'Previous_week_max_demand',
                 'Previous_2week_max_demand',
+                
+                'Previous_week_group_max_demand',
+                'Previous_week_group_min_demand',
+                'Previous_week_group_mean_demand',
 
                 'Previous_2week_demand',
                 'Previous_week_demand', 
@@ -98,7 +103,7 @@ FEATURE_LIST = [#'ARIMA_predicts',
                 ]
 
 TEST_START_DATE = '2023-04-01'
-GROUP_NUM = 10
+GROUP_NUM = 3
 AUTO_TUNE = False
 ```
 
@@ -185,7 +190,7 @@ labeled_df.head(10)
 ```{python}
 location_demand_df = labeled_df.groupby('Location')['Demand'].max().to_frame('Demand').sort_values(by = 'Demand').reset_index()
 kmeans = KMeans(n_clusters = GROUP_NUM)
-kmeans.fit(location_demand_df)
+kmeans.fit(location_demand_df['Demand'].to_numpy().reshape(-1, 1))
 ```
 
 ```{python}
@@ -206,7 +211,7 @@ def group_locations(location_demand_df, group_num):
 
 ```{python}
 centroids = kmeans.cluster_centers_
-sorted_group_labels = np.argsort(centroids[:, 1])[-1 * GROUP_NUM:][::-1]
+sorted_group_labels = np.argsort(centroids[:, 0])[-1 * GROUP_NUM:][::-1]
 ```
 
 ```{python}
@@ -219,6 +224,10 @@ for i in range(GROUP_NUM):
     one_group_demand_df = grouped_locations[sorted_group_labels[i]][0]
     one_group_demand_df = labeled_df[labeled_df['Location'].isin(one_group_demand_df)].reset_index(drop = True)
     grouped_locations_dfs.append(one_group_demand_df)
+```
+
+```{python}
+grouped_locations_dfs[0]
 ```
 
 ## Add Feature
@@ -240,8 +249,55 @@ def feature_engineering(dataset):
     dataset['Previous_13day_demand'] = dataset.groupby(['Location'])['Demand'].shift(13)
     dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
 
-    dataset['Previous_week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=7).max().reset_index(drop = True)
-    dataset['Previous_2week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=14).max().reset_index(drop = True)
+    dataset['Previous_week_max_demand'] = dataset['Demand'].rolling(window=7).max().reset_index(drop = True)
+    dataset['Previous_2week_max_demand'] = dataset['Demand'].rolling(window=14).max().reset_index(drop = True)
+
+    data_per_date = []
+
+    # Get the unique dates from the DataFrame
+    unique_dates = dataset['Date'].unique()
+
+    # Number of days to look back (in this case, 7 days)
+    days_to_look_back = 7
+
+    # Iterate through each date
+    for date in unique_dates:
+        # Filter the DataFrame to get the 7 past day rows for the current date
+        past_7_days_df = dataset[dataset['Date'] >= date - pd.Timedelta(days=days_to_look_back)]
+        past_7_days_df = past_7_days_df[past_7_days_df['Date'] < date]
+        
+        # Convert the filtered DataFrame to a dictionary with location as keys and demand values as values
+        data_dict = past_7_days_df.set_index('Location')['Demand'].to_dict()
+        data_per_date.append(data_dict)
+
+    # Create an empty list to store the maximum demand for each date
+    max_demand_per_date = []
+    min_demand_per_date = []
+    mean_demand_per_date = []
+
+    # Iterate through the data_per_date list
+    for data_dict in data_per_date:
+        if data_dict:  # Check if the dictionary is not empty
+            max_demand_per_date.append(max(data_dict.values()))
+            min_demand_per_date.append(min(data_dict.values()))
+            mean_demand_per_date.append(np.mean(list(data_dict.values())))
+        else:
+            max_demand_per_date.append(None)
+            min_demand_per_date.append(None)
+            mean_demand_per_date.append(None)
+
+    # Convert the list to a numpy array
+    max_demand_per_date = np.array(max_demand_per_date)
+    min_demand_per_date = np.array(min_demand_per_date)
+    mean_demand_per_date = np.array(mean_demand_per_date)
+
+    max_demand_df = pd.DataFrame({'Date': unique_dates, 'Previous_week_group_max_demand': max_demand_per_date})
+    min_demand_df = pd.DataFrame({'Date': unique_dates, 'Previous_week_group_min_demand': min_demand_per_date})
+    mean_demand_df = pd.DataFrame({'Date': unique_dates, 'Previous_week_group_mean_demand': mean_demand_per_date})
+
+    dataset = dataset.merge(max_demand_df, on='Date')
+    dataset = dataset.merge(min_demand_df, on='Date')
+    dataset = dataset.merge(mean_demand_df, on='Date')
 
     dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
     dataset['Day_of_month'] = dataset['Date'].dt.day
@@ -254,12 +310,20 @@ grouped_locations_features_dfs = []
 for i in range(GROUP_NUM):
     one_group_features_df = feature_engineering(grouped_locations_dfs[i])
     one_group_features_df = one_group_features_df.dropna().reset_index(drop = True)
+    one_group_features_df['Previous_week_group_max_demand'] = one_group_features_df['Previous_week_group_max_demand'].astype('float64')
+    one_group_features_df['Previous_week_group_min_demand'] = one_group_features_df['Previous_week_group_min_demand'].astype('float64')
+    one_group_features_df['Previous_week_group_min_demand'] = one_group_features_df['Previous_week_group_mean_demand'].astype('float64')
     grouped_locations_features_dfs.append(one_group_features_df)
 ```
 
 ```{python}
+grouped_locations_features_dfs[0]
+```
+
+```{python}
 features_df = pd.concat(grouped_locations_features_dfs, axis = 0)
-features_df = features_df.sort_values(by = ['Location', 'Date'])
+features_df = features_df.sort_values(by = ['Location', 'Date']).reset_index(drop = True)
+features_df = features_df
 ```
 
 ```{python}
@@ -461,6 +525,10 @@ labeled_train_prediction_df = prediction_labeling(train_prediction_df, train_df)
 ```{python}
 print(f'labeled prediction dataframe shape : {labeled_test_prediction_df.shape}')
 labeled_test_prediction_df.head()
+```
+
+```{python}
+labeled_test_prediction_df
 ```
 
 ```{python}
