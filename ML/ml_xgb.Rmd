@@ -23,12 +23,14 @@ import numpy as np
 import pandas as pd
 import shap
 import xgboost as xgb
+import geopandas as gpd
 
+from shapely.geometry import Polygon, MultiPolygon
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import LabelEncoder
-import geopandas as gpd
+
 ```
 
 <!-- #region id="pSSMa3G2wGmF" -->
@@ -46,7 +48,7 @@ RIDGE_TRAIN_PATH = 'results/ridge_train_predictions.parquet'
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-FEATURE_LIST = ['ARIMA_predicts',
+FEATURE_LIST = [#'ARIMA_predicts',
                 # 'borough',
                 
                 # 'Previous_week_trip_dist',
@@ -60,23 +62,25 @@ FEATURE_LIST = ['ARIMA_predicts',
                 # 'Previous_week_fare_amount',
                 # 'Previous_day_fare_amount',
                 # 'Previous_2week_fare_amount',
-                #'Ridge_predict',
+                'Ridge_predict',
+                'X',
+                'Y',
 
                 'Previous_2week_demand',
                 'Previous_week_demand', 
 
                 'Previous_day_demand',
-                'Previous_2day_demand',
-                'Previous_3day_demand',
-                'Previous_4day_demand',
-                'Previous_5day_demand',
-                'Previous_6day_demand',
-                'Previous_8day_demand',
-                'Previous_9day_demand',
-                'Previous_10day_demand',
-                'Previous_11day_demand',
-                'Previous_12day_demand',
-                'Previous_13day_demand',
+                # 'Previous_2day_demand',
+                # 'Previous_3day_demand',
+                # 'Previous_4day_demand',
+                # 'Previous_5day_demand',
+                # 'Previous_6day_demand',
+                # 'Previous_8day_demand',
+                # 'Previous_9day_demand',
+                # 'Previous_10day_demand',
+                # 'Previous_11day_demand',
+                # 'Previous_12day_demand',
+                # 'Previous_13day_demand',
 
                 # 'Previous_week_extra',
                 # 'Previous_2week_extra',
@@ -97,7 +101,7 @@ FEATURE_LIST = ['ARIMA_predicts',
 
 TEST_START_DATE = '2023-04-01'
 
-AUTO_TUNE = False
+AUTO_TUNE = True
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -142,22 +146,38 @@ ridge_df.head()
 ```
 
 ```{python}
-arima_df = pd.read_parquet(ARIMA_PATH)
-```
-
-```{python}
-print(f'rides dataframe shape : {arima_df.shape}')
-arima_df.head()
-
-```
-
-```{python}
 regions_df = gpd.read_file('taxi_zones/taxi_zones.shp')
 regions_df = regions_df.rename(columns = {'LocationID' : 'Location'})
 ```
 
 ```{python}
-regions_df['borough']
+def extract_coordinates(geom):
+    x_coords = []
+    y_coords = []
+    
+    if isinstance(geom, Polygon):
+        polygons = [geom]
+    elif isinstance(geom, MultiPolygon):
+        polygons = geom.geoms
+        
+    for polygon in polygons:
+        coords = polygon.exterior.coords
+        x_coords.extend([point[0] for point in coords])
+        y_coords.extend([point[1] for point in coords])
+    
+    return x_coords, y_coords
+```
+
+```{python}
+regions_df[['X', 'Y']] = regions_df['geometry'].apply(lambda geom: pd.Series(extract_coordinates(geom)))
+regions_df.loc[56, 'Location'] = 57
+```
+
+```{python}
+for i in range(len(regions_df)):
+    regions_df['Y'][i] = np.mean(regions_df['Y'][i])
+    regions_df['X'][i] = np.mean(regions_df['X'][i])
+regions_df = regions_df[['Location', 'X', 'Y']]
 ```
 
 <!-- #region id="X2ES_CY6-fb5" -->
@@ -189,18 +209,15 @@ def labeling(dataset, zones):
     labels_df = (
         location_date_df
         .merge(dataset_labels, how='left', on=['Location', 'Date'])
+        .merge(zones, how='left', on=['Location'])
         .fillna(value=0)
     )
     return labels_df
 
 ```
 
-```{python}
-regions_df['borough'] = LabelEncoder().fit_transform(regions_df[['borough', 'Location']]['borough'])
-```
-
 ```{python id="VVRLakW_LeGp"}
-labeled_df = labeling(rides_df, regions_df[['borough', 'Location']])
+labeled_df = labeling(rides_df, regions_df)
 ```
 
 ```{python id="0Gm5j5em28Xy"}
@@ -217,7 +234,7 @@ labeled_df.to_parquet('labels.parquet')
 <!-- #endregion -->
 
 ```{python id="ifvk6uWS6hnT"}
-def feature_engineering(dataset, statics_df):
+def feature_engineering(dataset, ridge_df):
     dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
     dataset['Previous_2day_demand'] = dataset.groupby(['Location'])['Demand'].shift(2)
     dataset['Previous_3day_demand'] = dataset.groupby(['Location'])['Demand'].shift(3)
@@ -248,7 +265,7 @@ def feature_engineering(dataset, statics_df):
 ```
 
 ```{python id="12zNfv8YwGmK"}
-features_df = feature_engineering(labeled_df, arima_df)
+features_df = feature_engineering(labeled_df, ridge_df)
 features_df.dropna(inplace = True)
 ```
 
@@ -439,16 +456,6 @@ def evaluate(metric, metric_name, true_values, predicted_values):
     print(f'{metric_name} : {metric(true_values, predicted_values)}')
 ```
 
-```{python}
-def smape(y_true, y_pred):
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    numerator = np.abs(y_pred - y_true)
-    denominator = (np.abs(y_true) + np.abs(y_pred))
-    smape = np.mean(numerator / denominator)
-    return smape * 100
-```
-
 ```{python id="v4-GWghuSbnA"}
 def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
@@ -457,14 +464,12 @@ def evaluation(model_name, train_df, test_df, train_prediction_df, test_predicti
     evaluate(mean_absolute_error, 'MAE', train_df['Demand'], train_prediction_df)
     evaluate(mean_squared_error, 'MSE', train_df['Demand'], train_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', train_df['Demand'], train_prediction_df)
-    evaluate(smape, 'smape', train_df['Demand'], train_prediction_df)
 
     print(f'{model_name} test scores:')
 
     evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
     evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
-    evaluate(smape, 'smape', test_df['Demand'], test_prediction_df)
 
 ```
 
