@@ -61,7 +61,8 @@ FEATURE_LIST = [#'ARIMA_predicts',
                 # 'Previous_week_fare_amount',
                 # 'Previous_day_fare_amount',
                 # 'Previous_2week_fare_amount',
-                #'group',
+                'Previous_week_max_demand',
+                'Previous_2week_max_demand',
 
                 'Previous_2week_demand',
                 'Previous_week_demand', 
@@ -97,7 +98,7 @@ FEATURE_LIST = [#'ARIMA_predicts',
                 ]
 
 TEST_START_DATE = '2023-04-01'
-GROUP_NUM = 2
+GROUP_NUM = 10
 AUTO_TUNE = False
 ```
 
@@ -173,44 +174,7 @@ labeled_df = labeling(rides_df)
 
 ```{python id="0Gm5j5em28Xy"}
 print(f'labeled dataframe shape : {labeled_df.shape}')
-labeled_df.head()
-```
-
-<!-- #region id="G0W2pR-70JJb" -->
-## Add Feature
-<!-- #endregion -->
-
-```{python id="ifvk6uWS6hnT"}
-def feature_engineering(dataset):
-    dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
-    dataset['Previous_2day_demand'] = dataset.groupby(['Location'])['Demand'].shift(2)
-    dataset['Previous_3day_demand'] = dataset.groupby(['Location'])['Demand'].shift(3)
-    dataset['Previous_4day_demand'] = dataset.groupby(['Location'])['Demand'].shift(4)
-    dataset['Previous_5day_demand'] = dataset.groupby(['Location'])['Demand'].shift(5)
-    dataset['Previous_6day_demand'] = dataset.groupby(['Location'])['Demand'].shift(6)
-    dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
-    dataset['Previous_8day_demand'] = dataset.groupby(['Location'])['Demand'].shift(8)
-    dataset['Previous_9day_demand'] = dataset.groupby(['Location'])['Demand'].shift(9)
-    dataset['Previous_10day_demand'] = dataset.groupby(['Location'])['Demand'].shift(10)
-    dataset['Previous_11day_demand'] = dataset.groupby(['Location'])['Demand'].shift(11)
-    dataset['Previous_12day_demand'] = dataset.groupby(['Location'])['Demand'].shift(12)
-    dataset['Previous_13day_demand'] = dataset.groupby(['Location'])['Demand'].shift(13)
-    dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
-
-    dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
-    dataset['Day_of_month'] = dataset['Date'].dt.day
-    
-    return dataset
-```
-
-```{python id="12zNfv8YwGmK"}
-features_df = feature_engineering(labeled_df)
-features_df.dropna(inplace = True)
-```
-
-```{python id="bJxWEkiD3VOZ"}
-print(f'features dataframe shape : {features_df.shape}')
-features_df.head()
+labeled_df.head(10)
 ```
 
 ## Grouping Locations
@@ -242,7 +206,7 @@ def group_locations(location_demand_df, group_num):
 
 ```{python}
 centroids = kmeans.cluster_centers_
-sorted_group_labels = np.argsort(centroids[:, 1])[-3:][::-1]
+sorted_group_labels = np.argsort(centroids[:, 1])[-1 * GROUP_NUM:][::-1]
 ```
 
 ```{python}
@@ -250,23 +214,57 @@ grouped_locations = group_locations(location_demand_df, GROUP_NUM)
 ```
 
 ```{python}
-high_demand_location_df = grouped_locations[sorted_group_labels[0]][0]
-mid_deman_location_df = grouped_locations[sorted_group_labels[1]][0]
-#low_demand_location_df = grouped_locations[sorted_group_labels[2]][0]
+grouped_locations_dfs = []
+for i in range(GROUP_NUM):
+    one_group_demand_df = grouped_locations[sorted_group_labels[i]][0]
+    one_group_demand_df = labeled_df[labeled_df['Location'].isin(one_group_demand_df)].reset_index(drop = True)
+    grouped_locations_dfs.append(one_group_demand_df)
+```
+
+## Add Feature
+
+```{python}
+def feature_engineering(dataset):
+    dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
+    dataset['Previous_2day_demand'] = dataset.groupby(['Location'])['Demand'].shift(2)
+    dataset['Previous_3day_demand'] = dataset.groupby(['Location'])['Demand'].shift(3)
+    dataset['Previous_4day_demand'] = dataset.groupby(['Location'])['Demand'].shift(4)
+    dataset['Previous_5day_demand'] = dataset.groupby(['Location'])['Demand'].shift(5)
+    dataset['Previous_6day_demand'] = dataset.groupby(['Location'])['Demand'].shift(6)
+    dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
+    dataset['Previous_8day_demand'] = dataset.groupby(['Location'])['Demand'].shift(8)
+    dataset['Previous_9day_demand'] = dataset.groupby(['Location'])['Demand'].shift(9)
+    dataset['Previous_10day_demand'] = dataset.groupby(['Location'])['Demand'].shift(10)
+    dataset['Previous_11day_demand'] = dataset.groupby(['Location'])['Demand'].shift(11)
+    dataset['Previous_12day_demand'] = dataset.groupby(['Location'])['Demand'].shift(12)
+    dataset['Previous_13day_demand'] = dataset.groupby(['Location'])['Demand'].shift(13)
+    dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
+
+    dataset['Previous_week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=7).max().reset_index(drop = True)
+    dataset['Previous_2week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=14).max().reset_index(drop = True)
+
+    dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
+    dataset['Day_of_month'] = dataset['Date'].dt.day
+    
+    return dataset
 ```
 
 ```{python}
-high_demand_df = features_df[features_df['Location'].isin(high_demand_location_df)].reset_index(drop = True)
-high_demand_df['group'] = 1
-
-mid_demand_df = features_df[features_df['Location'].isin(mid_deman_location_df)].reset_index(drop = True)
-mid_demand_df['group'] = 0
-#low_demand_df = features_df[features_df['Location'].isin(low_demand_location_df)].reset_index(drop = True)
+grouped_locations_features_dfs = []
+for i in range(GROUP_NUM):
+    one_group_features_df = feature_engineering(grouped_locations_dfs[i])
+    one_group_features_df = one_group_features_df.dropna().reset_index(drop = True)
+    grouped_locations_features_dfs.append(one_group_features_df)
 ```
 
 ```{python}
-features_df = pd.concat([high_demand_df, mid_demand_df], axis = 0)
+features_df = pd.concat(grouped_locations_features_dfs, axis = 0)
 features_df = features_df.sort_values(by = ['Location', 'Date'])
+```
+
+```{python}
+print(f'features dataframe shape : {features_df.shape}')
+features_df.head()
 ```
 
 <!-- #region id="zN0kp6jw03DP" -->
