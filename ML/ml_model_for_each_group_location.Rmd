@@ -96,7 +96,7 @@ FEATURE_LIST = [#'ARIMA_predicts',
                 ]
 
 TEST_START_DATE = '2023-04-01'
-GROUP_NUM = 3
+GROUP_NUM = 2
 AUTO_TUNE = False
 ```
 
@@ -267,13 +267,17 @@ grouped_locations = group_locations(location_demand_df, GROUP_NUM)
 ```{python}
 high_demand_location_df = grouped_locations[sorted_group_labels[0]][0]
 mid_deman_location_df = grouped_locations[sorted_group_labels[1]][0]
-low_demand_location_df = grouped_locations[sorted_group_labels[2]][0]
+#low_demand_location_df = grouped_locations[sorted_group_labels[2]][0]
+```
+
+```{python}
+len(high_demand_location_df)
 ```
 
 ```{python}
 high_demand_df = features_df[features_df['Location'].isin(high_demand_location_df)].reset_index(drop = True)
 mid_demand_df = features_df[features_df['Location'].isin(mid_deman_location_df)].reset_index(drop = True)
-low_demand_df = features_df[features_df['Location'].isin(low_demand_location_df)].reset_index(drop = True)
+#low_demand_df = features_df[features_df['Location'].isin(low_demand_location_df)].reset_index(drop = True)
 ```
 
 <!-- #region id="zN0kp6jw03DP" -->
@@ -290,31 +294,36 @@ def train_test_splitting(dataset, TEST_START_DATE):
 ```
 
 ```{python id="3xH4VMGNwGmK"}
-low_demand_train_df, low_demand_test_df = train_test_splitting(low_demand_df, TEST_START_DATE)
-high_demand_train_df, mid_demand_test_df = train_test_splitting(mid_demand_df, TEST_START_DATE)
+#low_demand_train_df, low_demand_test_df = train_test_splitting(low_demand_df, TEST_START_DATE)
+mid_demand_train_df, mid_demand_test_df = train_test_splitting(mid_demand_df, TEST_START_DATE)
 high_demand_train_df, high_demand_test_df = train_test_splitting(high_demand_df, TEST_START_DATE)
 ```
 
 ```{python id="xxGdRZfqwGmL", outputId="58609337-c472-48f5-c7fc-e9d7c17aba4f"}
-print(f'train dataframe shape : {mid_demand_train_df.shape}')
-mid_demand_train_df.head()
+print(f'train dataframe shape : {high_demand_train_df.shape}')
+high_demand_train_df.head()
 ```
 
 ```{python id="uPbINwH224Hy"}
-print(f'test dataframe shape : {mid_demand_test_df.shape}')
-mid_demand_test_df.head()
+print(f'test dataframe shape : {high_demand_test_df.shape}')
+high_demand_test_df.head()
 ```
 
 <!-- #region id="xf8ChW_7wGmL" -->
 # Model Training
 <!-- #endregion -->
 
+## High Demand
+
+
+## Mid Demand
+
 <!-- #region id="PxYfxyCHz_Z3" -->
-## **Ridge Regression**
+### **Ridge Regression**
 <!-- #endregion -->
 
 <!-- #region id="CJn4YIBtKcL_" -->
-### Model Tuning
+#### Model Tuning
 <!-- #endregion -->
 
 ```{python id="sOMPo5ryBm8g"}
@@ -336,7 +345,7 @@ model = Ridge()
 best_params, best_score = grid_search(
     model, 
     {'alpha':[0, 1, 10, 100]},
-    high_demand_train_df, 
+    mid_demand_train_df, 
     cv = 5, 
     feature_list = FEATURE_LIST
     )
@@ -345,7 +354,7 @@ print(best_params, best_score)
 ```
 
 <!-- #region id="AxN2E_9Q1yHS" -->
-### Prediction
+#### Prediction
 <!-- #endregion -->
 
 ```{python id="pbhM5Oe6PjW7"}
@@ -362,11 +371,11 @@ def model_predict(model, train_data, test_data, feature_list):
 
 ```{python id="MulwYZc7LK7v"}
 model = Ridge(**best_params)
-high_demand_train_prediction_df , high_demand_test_prediction_df  = model_predict(model, high_demand_train_df, high_demand_test_df, FEATURE_LIST)
+mid_demand_train_prediction_df , mid_demand_test_prediction_df  = model_predict(model, mid_demand_train_df, mid_demand_test_df, FEATURE_LIST)
 ```
 
 <!-- #region id="jJYHtg2oRqvS" -->
-### Visualization
+#### Visualization
 <!-- #endregion -->
 
 ```{python}
@@ -415,11 +424,11 @@ def prediction_visualization(train_data, test_data, train_prediction_df, test_pr
 ```
 
 ```{python colab={'base_uri': 'https://localhost:8080/', 'height': 887}, id="gOyNantNRtda", outputId="dc7796cf-c196-421d-bd56-1d312334dee4"}
-prediction_visualization(high_demand_train_df, high_demand_test_df, high_demand_train_prediction_df, high_demand_test_prediction_df)
+prediction_visualization(mid_demand_train_df, mid_demand_test_df, mid_demand_train_prediction_df, mid_demand_test_prediction_df)
 ```
 
 <!-- #region id="RBsqB5hnSuPP" -->
-### Evaluation
+#### Evaluation
 <!-- #endregion -->
 
 ```{python id="BcGvcilUWEEC"}
@@ -445,7 +454,7 @@ def evaluation(model_name, train_data, test_data, train_prediction_df, test_pred
 ```
 
 ```{python colab={'base_uri': 'https://localhost:8080/'}, id="vUBqNgIwSwKe", outputId="c05d64b8-b525-458d-96db-757e94a57d89"}
-evaluation('Ridge Regression', high_demand_train_df, high_demand_test_df, high_demand_train_prediction_df, high_demand_test_prediction_df)
+evaluation('Ridge Regression', mid_demand_train_df, mid_demand_test_df, mid_demand_train_prediction_df, mid_demand_test_prediction_df)
 ```
 
 # File Saving
