@@ -25,70 +25,101 @@ from tabulate import tabulate
 # Configs
 
 ```{python}
-LABELED_PATH = "../data/results/labels.parquet"
-PREDICTED_XGB_PATH = "../data/results/xgb_prediction_labeled.parquet"
-PREDICTED_XGB_ARIMA_PATH = "../data/results/xgb_predictions_tuned.parquet"
-PREDICTED_REGRESSION_PATH = "../data/results/ridge_predictions.parquet"
-PREDICTED_ARIMA_PATH = "../data/results/arima_predict.parquet"
+LABELED_PATH = 'data/labels.parquet'
+# PREDICTED_XGB_PATH = "../data/results/xgb_predictions.parquet"
+PREDICTED_RF_PATH = 'results/with_two_week_features/rf_predictions.parquet'
+# PREDICTED_REGRESSION_PATH = "../data/results/ridge_predictions.parquet"
 TEST_START_DATE = '2023-04-01'
-IMPORTANT_LOCATIONS = 50
-SAVE_PLOT_PATH = '../data/pngs/'
+LAST_WEEK_TEST_START_DATE = '2023-03-25'
+HIGH_DEMAND_NUMS = 14
+MID_DEMAND_NUMS = 26
+
 warnings.filterwarnings('ignore')
 ```
 
 ```{python}
 report_dict = {
-    'important_lacations':{
+    'high_demand_locations':{
         'MAPE':{
             'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
         },
         'MAE':{
             'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
         },
         'RMSE':{
             'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
+        }
+        
+    },
+    'mid_demand_locations':{
+        'MAPE':{
+            'baseline_last_week':None,
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
+        },
+        'MAE':{
+            'baseline_last_week':None,
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
+        },
+        'RMSE':{
+            'baseline_last_week':None,
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
         }
         
     },    
-    'others_locations':{
+    'low_demand_locations':{
         'MAPE':{
             'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
         },
         'MAE':{
             'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
         },
         'RMSE':{
             'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
         }
         
     },
     'all_locations':{
         'MAPE':{
             'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
         },
         'MAE':{
             'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
         },
         'RMSE':{
             'baseline_last_week':None,
-            'model_regression':None,
-            'model_xgboost':None
+            # 'model_regression':None,
+            # 'model_xgboost':None,
+            'model_rf':None
         }
     },
     
@@ -98,18 +129,20 @@ report_dict = {
 
 ```{python}
 predictions_dict = {
-    'baseline_last_day':None,
+    # 'baseline_last_day':None,
     'baseline_last_week':None,
-    'model_regression':None,
-    'model_xgboost':None,
+    # 'model_regression':None,
+    # 'model_xgboost':None,
+    'model_rf':None
 }
 ```
 
 ```{python}
 sorted_locations_dict={
     'baseline_last_week':None,
-    'model_regression':None,
-    'model_xgboost':None,
+    # 'model_regression':None,
+    # 'model_xgboost':None,
+    'model_rf':None
 }
 ```
 
@@ -120,63 +153,96 @@ predictions_mean_error_dict={
     {
         'Location':
                 {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
+                'high_demand_loc':None,
+                'mid_demand_loc':None,
+                'low_demand_loc':None,
+                'all_loc':None
                 },
         'Date':
                 {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
+                'high_demand_loc':None,
+                'mid_demand_loc':None,
+                'low_demand_loc':None,
+                'all_loc':None
                 },
         'day_of_week':
                 {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
+                'high_demand_loc':None,
+                'mid_demand_loc':None,
+                'low_demand_loc':None,
+                'all_loc':None
                 }
     },
-    'model_regression':
+#     'model_regression':
+#     {
+#         'Location':
+#                 {
+#                 'high_demand_loc':None,
+#                 'mid_demand_loc':None,
+#                 'low_demand_loc':None,
+#                 'all_loc':None
+#                 },
+#         'Date':
+#                 {
+#                 'high_demand_loc':None,
+#                 'mid_demand_loc':None,
+#                 'low_demand_loc':None,
+#                 'all_loc':None
+#                 },
+#         'day_of_week':
+#                 {
+#                 'high_demand_loc':None,
+#                 'mid_demand_loc':None,
+#                 'low_demand_loc':None,
+#                 'all_loc':None
+#                 }
+#     },
+#     'model_xgboost':
+#     {
+#         'Location':
+#                 {
+#                 'high_demand_loc':None,
+#                 'mid_demand_loc':None,
+#                 'low_demand_loc':None,
+#                 'all_loc':None
+#                 },
+#         'Date':
+#                 {
+#                 'high_demand_loc':None,
+#                 'mid_demand_loc':None,
+#                 'low_demand_loc':None,
+#                 'all_loc':None
+#                 },
+#         'day_of_week':
+#                 {
+#                 'high_demand_loc':None,
+#                 'mid_demand_loc':None,
+#                 'low_demand_loc':None,
+#                 'all_loc':None
+#                 }
+#     },
+    'model_rf':
     {
         'Location':
                 {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
+                'high_demand_loc':None,
+                'mid_demand_loc':None,
+                'low_demand_loc':None,
+                'all_loc':None
                 },
         'Date':
                 {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
+                'high_demand_loc':None,
+                'mid_demand_loc':None,
+                'low_demand_loc':None,
+                'all_loc':None
                 },
         'day_of_week':
                 {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                }
-    },
-    'model_xgboost':
-    {
-        'Location':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                },
-        'Date':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
-                },
-        'day_of_week':
-                {
-                'Important_loc':None,
-                'Others_loc':None,
-                'All_loc':None
+                'high_demand_loc':None,
+                'mid_demand_loc':None,
+                'low_demand_loc':None,
+                'all_loc':None
                 }
     },
 }
@@ -196,19 +262,28 @@ labeled_df.head()
 ```{python}
 test_df = labeled_df.loc[labeled_df['Date']>=TEST_START_DATE]
 test_df = test_df.reset_index(drop = True)
+print(test_df.shape)
 test_df.head()
 ```
 
 ## Load Predicted Data
 
 ```{python}
-predictions_dict['model_xgboost'] = pd.read_parquet(PREDICTED_XGB_ARIMA_PATH)
-predictions_dict['model_xgboost'].head()
+# predictions_dict['model_xgboost'] = pd.read_parquet(PREDICTED_XGB_PATH)
+# print(predictions_dict['model_xgboost'].shape)
+# predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
-predictions_dict['model_regression'] = pd.read_parquet(PREDICTED_REGRESSION_PATH)
-predictions_dict['model_regression'].head()
+predictions_dict['model_rf'] = pd.read_parquet(PREDICTED_RF_PATH)
+print(predictions_dict['model_rf'].shape)
+predictions_dict['model_rf'].head()
+```
+
+```{python}
+# predictions_dict['model_regression'] = pd.read_parquet(PREDICTED_REGRESSION_PATH)
+# print(predictions_dict['model_regression'].shape)
+# predictions_dict['model_regression'].head()
 ```
 
 ### BaseLine Models
@@ -222,33 +297,50 @@ def baseline_predict(dataset, shift_val):
 ```
 
 ```{python}
-predictions_dict['baseline_last_week'] = baseline_predict(test_df, 7)
+baseline_test_df = labeled_df.loc[labeled_df['Date']>=LAST_WEEK_TEST_START_DATE]
+baseline_test_df = baseline_test_df.reset_index(drop = True)
+print(baseline_test_df.shape)
+baseline_test_df.head()
+```
+
+```{python}
+predictions_dict['baseline_last_week'] = baseline_predict(baseline_test_df, 7)
+predictions_dict['baseline_last_week'] = predictions_dict['baseline_last_week'].dropna()
+print(predictions_dict['baseline_last_week'].shape)
+predictions_dict['baseline_last_week'].head()
 ```
 
 ### Join Predictions and Actual
 
 ```{python}
 def join_actual_predict(actual_df, predicted_df):
-    actual_predicted_df = actual_df.copy()
-    actual_predicted_df['Predicted_demand'] = predicted_df['Predicted_demand']
-    actual_predicted_df = actual_predicted_df.dropna()
+    actual_predicted_df = actual_df.merge(predicted_df, how='left', on=['Location', 'Date'])
     actual_predicted_df['day_of_week'] = actual_predicted_df['Date'].dt.dayofweek
     return actual_predicted_df
 ```
 
 ```{python}
 predictions_dict['baseline_last_week'] = join_actual_predict(test_df,predictions_dict['baseline_last_week'])
+print(predictions_dict['baseline_last_week'].shape)
 predictions_dict['baseline_last_week'].head()
 ```
 
 ```{python}
-predictions_dict['model_regression'] = join_actual_predict(test_df,predictions_dict['model_regression'])
-predictions_dict['model_regression'].head()
+predictions_dict['model_rf'] = join_actual_predict(test_df,predictions_dict['model_rf'])
+print(predictions_dict['model_rf'].shape)
+predictions_dict['model_rf'].head()
 ```
 
 ```{python}
-predictions_dict['model_xgboost'] = join_actual_predict(test_df,predictions_dict['model_xgboost'])
-predictions_dict['model_xgboost'].head()
+# predictions_dict['model_xgboost'] = join_actual_predict(test_df,predictions_dict['model_xgboost'])
+# print(predictions_dict['model_xgboost'].shape)
+# predictions_dict['model_xgboost'].head()
+```
+
+```{python}
+# predictions_dict['model_regression'] = join_actual_predict(test_df,predictions_dict['model_regression'])
+# print(predictions_dict['model_regression'].shape)
+# predictions_dict['model_regression'].head()
 ```
 
 ### Sort Locations by Demand
@@ -263,8 +355,19 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
 ```
 
 ```{python}
+# sort_locations_on_demand(predictions_dict, sorted_locations_dict)
+# print(sorted_locations_dict['model_xgboost'].shape)
+# sorted_locations_dict['model_xgboost'].head()
+```
+
+```{python}
+# predictions_dict['model_xgboost'].head()
+```
+
+```{python}
 sort_locations_on_demand(predictions_dict, sorted_locations_dict)
-sorted_locations_dict['model_xgboost'].head()
+print(sorted_locations_dict['baseline_last_week'].shape)
+sorted_locations_dict['baseline_last_week'].head()
 ```
 
 # Mean error Calculation
@@ -291,62 +394,95 @@ def calculate_error(actual_predicted_dict: dict):
 
 ```{python}
 calculate_error(predictions_dict)
-predictions_dict['model_regression'].head()
+```
+
+```{python}
+print(predictions_dict['baseline_last_week'].shape)
+predictions_dict['baseline_last_week'].head()
+```
+
+```{python}
+predictions_dict['baseline_last_week'].tail()
+```
+
+```{python}
+print(predictions_dict['model_rf'].shape)
+predictions_dict['model_rf'].head()
 ```
 
 ### Aggregate Error Columns
 
 ```{python}
-def calculate_maen_error(actual_predicted_dict: dict, predictions_mean_dict: dict):
+def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dict):
     per_columns=['Location', 'Date', 'day_of_week']
     for model,actual_predicted_df in actual_predicted_dict.items():
         if (actual_predicted_df is not None):
             sorted_index = sorted_locations_dict[model]['Location']
-            important_actual_predicted_df = actual_predicted_df.loc[actual_predicted_df['Location'].isin(sorted_index[:IMPORTANT_LOCATIONS])]
-            other_actual_predicted_df = actual_predicted_df.loc[~actual_predicted_df['Location'].isin(sorted_index[:IMPORTANT_LOCATIONS])]
+            high_demand_actual_predicted_df = actual_predicted_df.loc[actual_predicted_df['Location'].isin(sorted_index[:HIGH_DEMAND_NUMS])]
+            mid_demand_actual_predicted_df = actual_predicted_df.loc[actual_predicted_df['Location'].isin(sorted_index[HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS])]
+            low_demand_actual_predicted_df = actual_predicted_df.loc[actual_predicted_df['Location'].isin(sorted_index[HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:])]
             for per in per_columns:
-                important_error_df = important_actual_predicted_df[[per,'Demand','error', 'percentage_error',]] 
-                others_error_df = other_actual_predicted_df[[per,'Demand','error','percentage_error']] 
-                all_error_df = actual_predicted_df[[per,'Demand','error','percentage_error']]
+                high_demand_error_df = high_demand_actual_predicted_df[[per,'Demand','error','squared_error', 'percentage_error',]] 
+                mid_demand_error_df = mid_demand_actual_predicted_df[[per,'Demand','error','squared_error','percentage_error']] 
+                low_demand_error_df = low_demand_actual_predicted_df[[per,'Demand','error','squared_error','percentage_error']] 
+                all_error_df = actual_predicted_df[[per,'Demand','error','squared_error','percentage_error']]
                 
-                important_mean_df = important_error_df\
-                                                .groupby(per)\
-                                                .agg(mape=('percentage_error','mean'),
+                high_demand_mean_df = (
+                    high_demand_error_df.groupby(per).agg(mape=('percentage_error','mean'),
+                                                            mae=('error','mean'),
+                                                            mse=('squared_error','mean'),
+                                                            demand_mean=('Demand','mean'))) 
+                mid_demand_mean_df = (
+                    mid_demand_error_df.groupby(per).agg(mape=('percentage_error','mean'),
+                                                            mae=('error','mean'),
+                                                            mse=('squared_error','mean'),
+                                                            demand_mean=('Demand','mean')))
+                low_demand_mean_df = (
+                    low_demand_error_df.groupby(per).agg(mape=('percentage_error','mean'),
+                                                            mae=('error','mean'),
+                                                            mse=('squared_error','mean'),
+                                                            demand_mean=('Demand','mean')))
+                all_mean_df = (
+                    all_error_df.groupby(per).agg(mape=('percentage_error','mean'),
                                                     mae=('error','mean'),
-                                                    demand_mean=('Demand','mean')) 
-                others_mean_df = others_error_df\
-                                                .groupby(per)\
-                                                .agg(mape=('percentage_error','mean'),
-                                                    mae=('error','mean'),
-                                                    demand_mean=('Demand','mean')) 
-                all_mean_df = all_error_df\
-                                            .groupby(per)\
-                                            .agg(mape=('percentage_error','mean'),
-                                                mae=('error','mean'),
-                                                demand_mean=('Demand','mean')) 
-                important_mean_df['mape'] = np.where(important_mean_df['mape']>100, 100, important_mean_df['mape'])
-                others_mean_df['mape'] = np.where(others_mean_df['mape']>100, 100, others_mean_df['mape'])
+                                                    mse=('squared_error','mean'),
+                                                    demand_mean=('Demand','mean'))) 
+                
+                high_demand_mean_df['mape'] = np.where(high_demand_mean_df['mape']>100, 100, high_demand_mean_df['mape'])
+                mid_demand_mean_df['mape'] = np.where(mid_demand_mean_df['mape']>100, 100, mid_demand_mean_df['mape'])
+                low_demand_mean_df['mape'] = np.where(low_demand_mean_df['mape']>100, 100, low_demand_mean_df['mape'])
                 all_mean_df['mape'] = np.where(all_mean_df['mape']>100, 100, all_mean_df['mape'])
                 if per == 'Location':
-                    important_mean_df = important_mean_df.reindex(sorted_index[:IMPORTANT_LOCATIONS])
-
-                    others_mean_df = others_mean_df.reindex(sorted_index[IMPORTANT_LOCATIONS:])
-
+                    high_demand_mean_df = high_demand_mean_df.reindex(sorted_index[:HIGH_DEMAND_NUMS])
+                    mid_demand_mean_df = mid_demand_mean_df.reindex(sorted_index[HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS])
+                    low_demand_mean_df = low_demand_mean_df.reindex(sorted_index[HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:])
                     all_mean_df = all_mean_df.reindex(sorted_index)
                 
-                predictions_mean_dict[model][per]['Important_loc'] = important_mean_df.reset_index()
-                predictions_mean_dict[model][per]['Others_loc'] = others_mean_df.reset_index()
-                predictions_mean_dict[model][per]['All_loc'] = all_mean_df.reset_index()
+                predictions_mean_dict[model][per]['high_demand_loc'] = high_demand_mean_df.reset_index()
+                predictions_mean_dict[model][per]['mid_demand_loc'] = mid_demand_mean_df.reset_index()
+                predictions_mean_dict[model][per]['low_demand_loc'] = low_demand_mean_df.reset_index()
+                predictions_mean_dict[model][per]['all_loc'] = all_mean_df.reset_index()
                 
     
 ```
 
 ```{python}
-calculate_maen_error(predictions_dict, predictions_mean_error_dict)
+calculate_mean_error(predictions_dict, predictions_mean_error_dict)
 ```
 
 ```{python}
-predictions_mean_error_dict['baseline_last_week']['Date']['Important_loc'].head()
+print(predictions_mean_error_dict['baseline_last_week']['Date']['mid_demand_loc'].shape)
+predictions_mean_error_dict['baseline_last_week']['Date']['mid_demand_loc'].tail()
+```
+
+```{python}
+# print(predictions_mean_error_dict['model_xgboost']['Location']['mid_demand_loc'].shape)
+# predictions_mean_error_dict['model_xgboost']['Location']['mid_demand_loc'].tail()
+```
+
+```{python}
+print(predictions_mean_error_dict['model_rf']['Location']['mid_demand_loc'].shape)
+predictions_mean_error_dict['model_rf']['Location']['mid_demand_loc'].tail()
 ```
 
 ### Plot Mape for Models Predicted Demands
@@ -354,33 +490,36 @@ predictions_mean_error_dict['baseline_last_week']['Date']['Important_loc'].head(
 ```{python}
 def plot_mape(predictions_mean_dict, per):
     
-    fig, axes = plt.subplots(nrows=(4 if (per == 'Location') else 3 ), ncols=1, figsize=((15,25)if (per == 'Location') else (15,20))) 
+    fig, axes = plt.subplots(nrows=4, ncols=1, figsize=(15,25))
     
     for model,mean_df in predictions_mean_dict.items():
-        important_df = mean_df[per]['Important_loc']
-        others_df = mean_df[per]['Others_loc']
-        all_df = mean_df[per]['All_loc']
-        if (important_df is not None) and (others_df is not None):
-            important_df[per] = important_df[per].astype(str)
-            others_df[per] = others_df[per].astype(str)
+        high_demand_df = mean_df[per]['high_demand_loc']
+        mid_demand_df = mean_df[per]['mid_demand_loc']
+        low_demand_df = mean_df[per]['low_demand_loc']
+        all_df = mean_df[per]['all_loc']
+        
+        if ((low_demand_df is not None) and 
+            (mid_demand_df is not None)and 
+            (high_demand_df is not None)and 
+            (all_df is not None)):
+            
+            high_demand_df[per] = high_demand_df[per].astype(str)
+            mid_demand_df[per] = mid_demand_df[per].astype(str)
+            low_demand_df[per] = low_demand_df[per].astype(str)
             all_df[per] = all_df[per].astype(str)
 
-            important_df.plot(x=per,y='mape',kind='line',marker='.',ax = axes[0], label=model)
-            if per == 'Location':
-                split_size = len(others_df)//2
-                others_df[:split_size].plot(x=per,y='mape',kind='line',marker='.',ax = axes[1],label=model)
-                others_df[split_size:].plot(x=per,y='mape',kind='line',marker='.',ax = axes[2],label=model)
-                all_df.plot(x=per,y='mape',kind='line',ax = axes[3],label=model)
-            else:
-                others_df.plot(x=per,y='mape',kind='line',marker='.',ax = axes[1],label=model)
-                all_df.plot(x=per,y='mape',kind='line',ax = axes[2],label=model)
+            high_demand_df.plot(x=per,y='mape',kind='line',marker='.',ax = axes[0], label=model)            
+            mid_demand_df.plot(x=per,y='mape',kind='line',marker='.',ax = axes[1],label=model)
+            low_demand_df.plot(x=per,y='mape',kind='line',marker='.',ax = axes[2],label=model)
+            all_df.plot(x=per,y='mape',kind='line',ax = axes[3],label=model)
 
-    axes[0].set_title('Models MAPE for '+str(IMPORTANT_LOCATIONS)+' imortant locations', bbox=dict( alpha=0.5)) 
-    axes[1].set_title('Models MAPE for other locations', bbox=dict(alpha=0.5)) 
+    axes[0].set_title('Models MAPE for '+str(HIGH_DEMAND_NUMS)+' high demand locations', bbox=dict( alpha=0.5)) 
+    axes[1].set_title('Models MAPE for '+str(MID_DEMAND_NUMS)+' lower demand locations', bbox=dict( alpha=0.5)) 
+    axes[2].set_title('Models MAPE for other low demand locations', bbox=dict( alpha=0.5)) 
     axes[-1].set_title('Models MAPE for all locations', bbox=dict(alpha=0.5))
 
-    plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
-    plt.savefig(plot_name, format='svg', dpi=1200)  
+    # plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
+    # plt.savefig(plot_name, format='svg', dpi=1200)  
 
 ```
 
@@ -393,7 +532,7 @@ plot_mape(predictions_mean_error_dict, 'Date')
 ```
 
 ```{python}
-plot_mape(predictions_mean_error_dict, 'day_of_week')
+# plot_mape(predictions_mean_error_dict, 'day_of_week')
 ```
 
 ### Plot MAE
@@ -401,35 +540,36 @@ plot_mape(predictions_mean_error_dict, 'day_of_week')
 ```{python}
 def plot_mae(predictions_mean_dict, per):
     
-    fig, axes = plt.subplots(nrows=(4 if (per == 'Location') else 3 ), ncols=1, figsize=((15,25)if (per == 'Location') else (15,20))) 
-
+    fig, axes = plt.subplots(nrows=4, ncols=1, figsize=(15,25))
     
     for model,mean_df in predictions_mean_dict.items():
-        important_df = mean_df[per]['Important_loc']
-        other_df = mean_df[per]['Others_loc']
-        all_df = mean_df[per]['All_loc']
-        if (important_df is not None) and (other_df is not None) and (all_df is not None):
+        high_demand_df = mean_df[per]['high_demand_loc']
+        mid_demand_df = mean_df[per]['mid_demand_loc']
+        low_demand_df = mean_df[per]['low_demand_loc']
+        all_df = mean_df[per]['all_loc']
+        
+        if ((low_demand_df is not None) and 
+            (mid_demand_df is not None)and 
+            (high_demand_df is not None)and 
+            (all_df is not None)):
 
-            important_df[per] = important_df[per].astype(str)
-            other_df[per] = other_df[per].astype(str)
+            high_demand_df[per] = high_demand_df[per].astype(str)
+            mid_demand_df[per] = mid_demand_df[per].astype(str)
+            low_demand_df[per] = low_demand_df[per].astype(str)
             all_df[per] = all_df[per].astype(str)
-            
-            important_df.plot(  x=per,y='mae',kind='line',ax = axes[0],label=model)
-            if per == 'Location':
-                split_size = len(other_df)//2
-                other_df[:split_size].plot(x=per,y='mae',kind='line',ax = axes[1], label=model)
-                other_df[split_size:].plot(x=per,y='mae',kind='line',ax = axes[2],label=model)
-                all_df.plot(x=per,y='mae',kind='line',ax = axes[3],label=model)
-            else:
-                other_df.plot(x=per,y='mae',kind='line',ax = axes[1],label=model)
-                all_df.plot(x=per,y='mae',kind='line',ax = axes[2],label=model)
 
-    axes[0].set_title('Models MAE for '+str(IMPORTANT_LOCATIONS)+' imortant locations', bbox=dict( alpha=0.5)) 
-    axes[1].set_title('Models MAE for other locations', bbox=dict(alpha=0.5)) 
-    axes[-1].set_title('Models MAE for all locations', bbox=dict(alpha=0.5)) 
+            high_demand_df.plot(x=per,y='mae',kind='line',marker='.',ax = axes[0], label=model)            
+            mid_demand_df.plot(x=per,y='mae',kind='line',marker='.',ax = axes[1],label=model)
+            low_demand_df.plot(x=per,y='mae',kind='line',marker='.',ax = axes[2],label=model)
+            all_df.plot(x=per,y='mae',kind='line',ax = axes[3],label=model)
 
-    plot_name = SAVE_PLOT_PATH + 'MAE_plot per '+per+'.svg'
-    plt.savefig(plot_name, format='svg', dpi=1200)
+    axes[0].set_title('Models MAE for '+str(HIGH_DEMAND_NUMS)+' high demand locations', bbox=dict( alpha=0.5)) 
+    axes[1].set_title('Models MAE for '+str(MID_DEMAND_NUMS)+' lower demand locations', bbox=dict( alpha=0.5)) 
+    axes[2].set_title('Models MAE for other low demand locations', bbox=dict( alpha=0.5)) 
+    axes[-1].set_title('Models MAE for all locations', bbox=dict(alpha=0.5))
+
+    # plot_name = SAVE_PLOT_PATH + 'ME_plot per '+per+'.svg'
+    # plt.savefig(plot_name, format='svg', dpi=1200)  
 
 ```
 
@@ -442,7 +582,61 @@ plot_mae(predictions_mean_error_dict, 'Date')
 ```
 
 ```{python}
-plot_mae(predictions_mean_error_dict, 'day_of_week')
+# plot_mae(predictions_mean_error_dict, 'day_of_week')
+```
+
+### plot RMSE
+
+```{python}
+def plot_rmse(predictions_mean_dict, per):
+    
+    fig, axes = plt.subplots(nrows=4, ncols=1, figsize=(15,25))
+    
+    for model,mean_df in predictions_mean_dict.items():
+        high_demand_df = mean_df[per]['high_demand_loc']
+        mid_demand_df = mean_df[per]['mid_demand_loc']
+        low_demand_df = mean_df[per]['low_demand_loc']
+        all_df = mean_df[per]['all_loc']
+        if ((low_demand_df is not None) and 
+            (mid_demand_df is not None)and 
+            (high_demand_df is not None)and 
+            (all_df is not None)):
+            
+            high_demand_df[per] = high_demand_df[per].astype(str)
+            mid_demand_df[per] = mid_demand_df[per].astype(str)
+            low_demand_df[per] = low_demand_df[per].astype(str)
+            all_df[per] = all_df[per].astype(str)
+
+            high_demand_df['rmse'] = np.sqrt(high_demand_df['mse'])
+            mid_demand_df['rmse'] = np.sqrt(mid_demand_df['mse'])
+            low_demand_df['rmse'] = np.sqrt(low_demand_df['mse'])
+            all_df['rmse'] = np.sqrt(all_df['mse'])
+
+            high_demand_df.plot(x=per,y='rmse',kind='line',marker='.',ax = axes[0], label=model)            
+            mid_demand_df.plot(x=per,y='rmse',kind='line',marker='.',ax = axes[1],label=model)
+            low_demand_df.plot(x=per,y='rmse',kind='line',marker='.',ax = axes[2],label=model)
+            all_df.plot(x=per,y='rmse',kind='line',ax = axes[3],label=model)
+
+    axes[0].set_title('Models RMSE for '+str(HIGH_DEMAND_NUMS)+' high demand locations', bbox=dict( alpha=0.5)) 
+    axes[1].set_title('Models RMSE for '+str(MID_DEMAND_NUMS)+' lower demand locations', bbox=dict( alpha=0.5)) 
+    axes[2].set_title('Models RMSE for other low demand locations', bbox=dict( alpha=0.5)) 
+    axes[-1].set_title('Models RMSE for all locations', bbox=dict(alpha=0.5))
+
+    # plot_name = SAVE_PLOT_PATH + 'ME_plot per '+per+'.svg'
+    # plt.savefig(plot_name, format='svg', dpi=1200)  
+
+```
+
+```{python}
+plot_rmse(predictions_mean_error_dict, 'Location')
+```
+
+```{python}
+plot_rmse(predictions_mean_error_dict, 'Date')
+```
+
+```{python}
+# plot_rmse(predictions_mean_error_dict, 'day_of_week')
 ```
 
 # Table of Results
@@ -455,16 +649,21 @@ def create_table_errors(predictions_dict, report_dict):
             report_dict['all_locations']['RMSE'][model] = np.sqrt(error_df['squared_error'].mean())
             report_dict['all_locations']['MAPE'][model] = error_df['percentage_error'].mean()
 
-            error_important_df = error_df.loc[error_df['Location'].isin(sorted_locations_dict[model][:IMPORTANT_LOCATIONS]['Location'])]
-            error_others_df = error_df.loc[~error_df['Location'].isin(sorted_locations_dict[model][:IMPORTANT_LOCATIONS]['Location'])]
+            error_high_demand_df = error_df.loc[error_df['Location'].isin(sorted_locations_dict[model][:HIGH_DEMAND_NUMS]['Location'])]
+            error_mid_demand_df = error_df.loc[error_df['Location'].isin(sorted_locations_dict[model][HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS]['Location'])]
+            error_low_demand_df = error_df.loc[error_df['Location'].isin(sorted_locations_dict[model][HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:]['Location'])]
 
-            report_dict['important_lacations']['MAE'][model] = error_important_df['error'].mean()            
-            report_dict['important_lacations']['RMSE'][model] = np.sqrt(error_important_df['squared_error'].mean())
-            report_dict['important_lacations']['MAPE'][model] = error_important_df['percentage_error'].mean()
+            report_dict['high_demand_locations']['MAE'][model] = error_high_demand_df['error'].mean()            
+            report_dict['high_demand_locations']['RMSE'][model] = np.sqrt(error_high_demand_df['squared_error'].mean())
+            report_dict['high_demand_locations']['MAPE'][model] = error_high_demand_df['percentage_error'].mean()
             
-            report_dict['others_locations']['MAE'][model] = error_others_df['error'].mean()            
-            report_dict['others_locations']['RMSE'][model] = np.sqrt(error_others_df['squared_error'].mean())
-            report_dict['others_locations']['MAPE'][model] = error_others_df['percentage_error'].mean()
+            report_dict['mid_demand_locations']['MAE'][model] = error_mid_demand_df['error'].mean()            
+            report_dict['mid_demand_locations']['RMSE'][model] = np.sqrt(error_mid_demand_df['squared_error'].mean())
+            report_dict['mid_demand_locations']['MAPE'][model] = error_mid_demand_df['percentage_error'].mean()
+            
+            report_dict['low_demand_locations']['MAE'][model] = error_low_demand_df['error'].mean()            
+            report_dict['low_demand_locations']['RMSE'][model] = np.sqrt(error_low_demand_df['squared_error'].mean())
+            report_dict['low_demand_locations']['MAPE'][model] = error_low_demand_df['percentage_error'].mean()
     return report_dict
 ```
 
@@ -477,22 +676,16 @@ report_df = pd.DataFrame.from_dict({(i,j): report_dict[i][j]
 
 report_df.index = pd.MultiIndex.from_tuples(report_df.index)
 report_df = report_df.T
-report_df = report_df.rename(columns={"('MAPE', 'important_lacations')": "Mape\nhigh_demand_locations"})
-
 ```
 
 ```{python}
 df = pd.DataFrame(report_df,
-                  index=pd.Index(['baseline_last_week', 'model_regression', 'model_xgboost']),
-                  columns=pd.MultiIndex.from_product([['important_lacations', 'others_locations', 'all_locations'],
+                  index=pd.Index(report_df.index),
+                  columns=pd.MultiIndex.from_product([['high_demand_locations', 'mid_demand_locations', 'low_demand_locations', 'all_locations'],
                                                       ['MAPE','MAE','RMSE']], names=['location category:', 'Error Metrics:']))
 
 ```
 
 ```{python}
 df.style.format('{:.2f}')
-```
-
-```{python}
-
 ```
