@@ -116,7 +116,7 @@ def load_data(path, start_date: str, end_date: str):
     end_date = datetime.date.fromisoformat(end_date)
     filtered_df = df[(df['tpep_pickup_datetime'].dt.date >= start_date) &
                      (df['tpep_pickup_datetime'].dt.date <= end_date)]
-    dataset = filtered_df.filter(items=['tpep_pickup_datetime', 'PULocationID', 'trip_distance', 'total_amount'])
+    dataset = filtered_df.filter(items=['tpep_pickup_datetime', 'PULocationID'])
     dataset['PU_date'] = pd.to_datetime(dataset['tpep_pickup_datetime'].dt.date)
     return dataset
 ```
@@ -136,7 +136,7 @@ rides_df.head()
 
 ```{python id="a7mNMQ-zwGmH"}
 def labeling(dataset):
-    dataset_labels_demand = (
+    dataset_labels = (
         dataset
         .groupby(['PULocationID', 'PU_date'])['PU_date']
         .count()
@@ -146,18 +146,8 @@ def labeling(dataset):
         .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
     )
 
-    dataset_labels_trip = (
-        dataset
-        .groupby(['PULocationID', 'PU_date'])['trip_distance']
-        .sum()
-        .to_frame('trip_dist_sums')
-        .sort_values(['PULocationID', 'PU_date'], ascending=[True, True])
-        .reset_index()
-        .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
-    )
-
-    locations = pd.DataFrame(dataset_labels_demand['Location'].unique(), columns=['Location'])
-    dates = pd.DataFrame(dataset_labels_demand['Date'].unique(), columns=['Date'])
+    locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
+    dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
 
     location_date_df = (
         locations
@@ -168,8 +158,7 @@ def labeling(dataset):
 
     labels_df = (
         location_date_df
-        .merge(dataset_labels_demand, how='left', on=['Location', 'Date'])
-        .merge(dataset_labels_trip, how='left', on=['Location', 'Date'])
+        .merge(dataset_labels, how='left', on=['Location', 'Date'])
         .fillna(value=0)
     )
 
@@ -206,11 +195,6 @@ def feature_engineering(dataset):
     dataset['Previous_12day_demand'] = dataset.groupby(['Location'])['Demand'].shift(12)
     dataset['Previous_13day_demand'] = dataset.groupby(['Location'])['Demand'].shift(13)
     dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
-
-    dataset['Previous_2week_trip_dist'] = dataset.groupby(['Location'])['trip_dist_sums'].shift(14)
-    dataset['Previous_week_trip_dist'] = dataset.groupby(['Location'])['trip_dist_sums'].shift(7)
-    dataset['Previous_day_trip_dist'] = dataset.groupby(['Location'])['trip_dist_sums'].shift(1)
-
 
     dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
     dataset['Day_of_month'] = dataset['Date'].dt.day

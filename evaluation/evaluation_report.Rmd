@@ -33,7 +33,7 @@ PREDICTED_VOTING_PATH = "data/results/voting_predictions.parquet"
 TEST_START_DATE = '2023-04-01'
 TEST_START_DATE_BASE_LINE = '2023-03-25'
 HIGH_DEMAND_NUMS = 30
-MID_DEMAND_NUMS = 100
+MID_DEMAND_NUMS = 0
 SAVE_PLOT_PATH = 'data/pngs/'
 warnings.filterwarnings('ignore')
 ```
