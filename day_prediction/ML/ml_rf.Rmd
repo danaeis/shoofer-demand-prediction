@@ -210,12 +210,10 @@ labeled_df.to_parquet('labels.parquet')
 ## Grouping Locations
 
 
-### KMeans
+### Agglomerative Clustering
 
 ```{python}
 location_demand_df = labeled_df.groupby('Location')['Demand'].max().to_frame('Demand').sort_values(by = 'Demand').reset_index()
-'''kmeans = KMeans(n_clusters = GROUP_NUM)
-kmeans.fit(location_demand_df['Demand'].to_numpy().reshape(-1, 1))'''
 clustering = AgglomerativeClustering(n_clusters = GROUP_NUM).fit(location_demand_df['Demand'].to_numpy().reshape(-1, 1))
 ```
 
@@ -236,8 +234,6 @@ def group_locations(location_demand_df, group_num):
 ```
 
 ```{python}
-'''centroids = kmeans.cluster_centers_
-sorted_group_labels = np.argsort(centroids[:, 0])[-1 * GROUP_NUM:][::-1]'''
 sorted_group_labels  = [i for i in range(GROUP_NUM)]
 ```
 
@@ -359,15 +355,6 @@ print(f'features dataframe shape : {features_df.shape}')
 features_df.head()
 ```
 
-```{python}
-pca = PCA()
-pca.fit(features_df[FEATURE_LIST])
-
-
-cumsum = np.cumsum(pca.explained_variance_ratio_)
-cumsum, len(FEATURE_LIST), pca.feature_names_in_
-```
-
 <!-- #region id="zN0kp6jw03DP" -->
 ## Split Train and Test Data
 <!-- #endregion -->
@@ -383,13 +370,6 @@ def train_test_splitting(dataset, TEST_START_DATE):
 
 ```{python id="3xH4VMGNwGmK"}
 train_df, test_df = train_test_splitting(features_df, TEST_START_DATE)
-'''pca = PCA(n_components = 5)
-xtrain = pca.fit_transform(train_df[FEATURE_LIST])
-
-pca = PCA(n_components = 5)
-xtest = pca.fit_transform(test_df[FEATURE_LIST])
-
-pca.fit(features_df[FEATURE_LIST])'''
 ```
 
 ```{python id="xxGdRZfqwGmL"}
