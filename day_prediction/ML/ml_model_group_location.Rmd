@@ -66,25 +66,25 @@ FEATURE_LIST = [#'ARIMA_predicts',
                 'Previous_week_max_demand',
                 'Previous_2week_max_demand',
                 
-                'Previous_week_group_max_demand',
-                'Previous_week_group_min_demand',
-                'Previous_week_group_mean_demand',
+                # 'Previous_week_group_max_demand',
+                # 'Previous_week_group_min_demand',
+                # 'Previous_week_group_mean_demand',
 
                 'Previous_2week_demand',
                 'Previous_week_demand', 
 
                 'Previous_day_demand',
-                # 'Previous_2day_demand',
-                # 'Previous_3day_demand',
-                # 'Previous_4day_demand',
-                # 'Previous_5day_demand',
-                # 'Previous_6day_demand',
-                # 'Previous_8day_demand',
-                # 'Previous_9day_demand',
-                # 'Previous_10day_demand',
-                # 'Previous_11day_demand',
-                # 'Previous_12day_demand',
-                # 'Previous_13day_demand',
+                'Previous_2day_demand',
+                'Previous_3day_demand',
+                'Previous_4day_demand',
+                'Previous_5day_demand',
+                'Previous_6day_demand',
+                'Previous_8day_demand',
+                'Previous_9day_demand',
+                'Previous_10day_demand',
+                'Previous_11day_demand',
+                'Previous_12day_demand',
+                'Previous_13day_demand',
 
                 # 'Previous_week_extra',
                 # 'Previous_2week_extra',
@@ -229,10 +229,6 @@ for i in range(GROUP_NUM):
     grouped_locations_dfs.append(one_group_demand_df)
 ```
 
-```{python}
-grouped_locations_dfs[1]
-```
-
 ## Add Feature
 
 ```{python}
@@ -252,8 +248,8 @@ def feature_engineering(dataset):
     dataset['Previous_13day_demand'] = dataset.groupby(['Location'])['Demand'].shift(13)
     dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
 
-    dataset['Previous_week_max_demand'] = dataset['Demand'].rolling(window=7).max().reset_index(drop = True)
-    dataset['Previous_2week_max_demand'] = dataset['Demand'].rolling(window=14).max().reset_index(drop = True)
+    dataset['Previous_week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=7).max().reset_index(drop = True)
+    dataset['Previous_2week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=14).max().reset_index(drop = True)
 
     data_per_date = []
 
@@ -317,10 +313,6 @@ for i in range(GROUP_NUM):
     one_group_features_df['Previous_week_group_min_demand'] = one_group_features_df['Previous_week_group_min_demand'].astype('float64')
     one_group_features_df['Previous_week_group_mean_demand'] = one_group_features_df['Previous_week_group_mean_demand'].astype('float64')
     grouped_locations_features_dfs.append(one_group_features_df)
-```
-
-```{python}
-grouped_locations_features_dfs[1]
 ```
 
 ```{python}
