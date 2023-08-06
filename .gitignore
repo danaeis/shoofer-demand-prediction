@@ -1,6 +1,7 @@
 #Data sets#
 ###########
 *.parquet
+*.svg
 
 datasets/
 results/
