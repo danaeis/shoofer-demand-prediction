@@ -31,6 +31,7 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.cluster import KMeans
 ```
 
@@ -73,17 +74,17 @@ FEATURE_LIST = [#'ARIMA_predicts',
                 'Previous_week_demand', 
 
                 'Previous_day_demand',
-                'Previous_2day_demand',
-                'Previous_3day_demand',
-                'Previous_4day_demand',
-                'Previous_5day_demand',
-                'Previous_6day_demand',
-                'Previous_8day_demand',
-                'Previous_9day_demand',
-                'Previous_10day_demand',
-                'Previous_11day_demand',
-                'Previous_12day_demand',
-                'Previous_13day_demand',
+                # 'Previous_2day_demand',
+                # 'Previous_3day_demand',
+                # 'Previous_4day_demand',
+                # 'Previous_5day_demand',
+                # 'Previous_6day_demand',
+                # 'Previous_8day_demand',
+                # 'Previous_9day_demand',
+                # 'Previous_10day_demand',
+                # 'Previous_11day_demand',
+                # 'Previous_12day_demand',
+                # 'Previous_13day_demand',
 
                 # 'Previous_week_extra',
                 # 'Previous_2week_extra',
@@ -189,19 +190,20 @@ labeled_df.head(10)
 
 ```{python}
 location_demand_df = labeled_df.groupby('Location')['Demand'].max().to_frame('Demand').sort_values(by = 'Demand').reset_index()
-kmeans = KMeans(n_clusters = GROUP_NUM)
-kmeans.fit(location_demand_df['Demand'].to_numpy().reshape(-1, 1))
+'''kmeans = KMeans(n_clusters = GROUP_NUM)
+kmeans.fit(location_demand_df['Demand'].to_numpy().reshape(-1, 1))'''
+clustering = AgglomerativeClustering(n_clusters = GROUP_NUM).fit(location_demand_df['Demand'].to_numpy().reshape(-1, 1))
 ```
 
 ```{python}
-plt.scatter(location_demand_df['Demand'], location_demand_df['Location'], c = kmeans.labels_)
+plt.scatter(location_demand_df['Demand'], location_demand_df['Location'], c = clustering.labels_)
 ```
 
 ```{python}
 def group_locations(location_demand_df, group_num):
     locations = [[] for i in range(group_num)]
     for i in range(group_num):
-        demand_values = location_demand_df['Demand'].to_numpy().reshape(-1, 1)[kmeans.labels_ == i]
+        demand_values = location_demand_df['Demand'].to_numpy().reshape(-1, 1)[clustering.labels_ == i]
         locations[i].append(
             location_demand_df[(location_demand_df['Demand'] >= np.min(demand_values))
             &(location_demand_df['Demand'] <= np.max(demand_values))]['Location'].values)
@@ -210,8 +212,9 @@ def group_locations(location_demand_df, group_num):
 ```
 
 ```{python}
-centroids = kmeans.cluster_centers_
-sorted_group_labels = np.argsort(centroids[:, 0])[-1 * GROUP_NUM:][::-1]
+'''centroids = kmeans.cluster_centers_
+sorted_group_labels = np.argsort(centroids[:, 0])[-1 * GROUP_NUM:][::-1]'''
+sorted_group_labels  = [i for i in range(GROUP_NUM)]
 ```
 
 ```{python}
@@ -227,7 +230,7 @@ for i in range(GROUP_NUM):
 ```
 
 ```{python}
-grouped_locations_dfs[0]
+grouped_locations_dfs[1]
 ```
 
 ## Add Feature
@@ -312,12 +315,12 @@ for i in range(GROUP_NUM):
     one_group_features_df = one_group_features_df.dropna().reset_index(drop = True)
     one_group_features_df['Previous_week_group_max_demand'] = one_group_features_df['Previous_week_group_max_demand'].astype('float64')
     one_group_features_df['Previous_week_group_min_demand'] = one_group_features_df['Previous_week_group_min_demand'].astype('float64')
-    one_group_features_df['Previous_week_group_min_demand'] = one_group_features_df['Previous_week_group_mean_demand'].astype('float64')
+    one_group_features_df['Previous_week_group_mean_demand'] = one_group_features_df['Previous_week_group_mean_demand'].astype('float64')
     grouped_locations_features_dfs.append(one_group_features_df)
 ```
 
 ```{python}
-grouped_locations_features_dfs[0]
+grouped_locations_features_dfs[1]
 ```
 
 ```{python}
