@@ -24,7 +24,6 @@ import pandas as pd
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
-from sklearn.cluster import AgglomerativeClustering
 ```
 
 <!-- #region id="pSSMa3G2wGmF" -->
@@ -32,10 +31,10 @@ from sklearn.cluster import AgglomerativeClustering
 <!-- #endregion -->
 
 ```{python id="zIkDLK9zwGmG"}
-INPUT_PATH = 'datasets/'
-ARIMA_PATH = 'statics/arima_predict.parquet'
-OUTPUT_PATH_TEST = 'results/ridge_test_predictions.parquet'
-OUTPUT_PATH_TRAIN = 'results/ridge_train_predictions.parquet'
+INPUT_PATH = '../../../ride_data/'
+
+OUTPUT_PATH_TEST = '../../../ridge/ridge_test_predictions.parquet'
+OUTPUT_PATH_TRAIN = '../../../ridge/ridge_train_predictions.parquet'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
@@ -129,7 +128,6 @@ def labeling(dataset):
     )
 
     return labels_df
-
 ```
 
 ```{python id="VVRLakW_LeGp"}
@@ -170,7 +168,7 @@ def feature_engineering(dataset):
 ```
 
 ```{python}
-features_df = feature_engineering(labeled_df, ridge_df)
+features_df = feature_engineering(labeled_df)
 features_df.dropna(inplace = True)
 ```
 
@@ -254,52 +252,36 @@ def model_predict(model, train_data, test_data, feature_list):
 
     model.fit(train_data[feature_list], train_data['Demand'])
 
-
-    train_predict_df  = model.predict(train_data[feature_list])
-    test_predict_df  = model.predict(test_data[feature_list])
+    train_predict_df = model.predict(train_data[feature_list])
+    test_predict_df = model.predict(test_data[feature_list])
 
     return train_predict_df, test_predict_df
 ```
 
 ```{python id="MulwYZc7LK7v"}
 model = Ridge(**best_params)
-train_prediction_df , test_prediction_df  = model_predict(model, train_df, test_df, FEATURE_LIST)
+train_prediction_df , test_prediction_df = model_predict(model, train_df, test_df, FEATURE_LIST)
 ```
 
 <!-- #region id="jJYHtg2oRqvS" -->
 #### Visualization
 <!-- #endregion -->
 
-```{python}
-def add_day_of_year(data):
-    data['day_year'] = 0
-    start_date = data['Date'].min()
-
-    for index, row in data.iterrows():
-
-        curr_date = row['Date']
-        day_number = (curr_date - start_date).days
-
-        data.at[index, 'day_year'] = day_number
-    return data
-```
-
 ```{python id="ao6nw8xsRvB9"}
 def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
 
-
-    train_data = add_day_of_year(train_data)
-    test_data = add_day_of_year(test_data)
+    train_data['Day_of_year'] = train_data['Date'].dt.dayofyear
+    test_data['Day_of_year'] = test_data['Date'].dt.dayofyear
 
     predicted_train_df = train_data
     predicted_test_df = test_data
     predicted_train_df['Predicted'] = train_prediction_df
     predicted_test_df['Predicted'] = test_prediction_df
 
-    train_data = train_data.groupby('day_year')['Demand'].sum()
-    test_data = test_data.groupby('day_year')['Demand'].sum()
-    predicted_train_df = predicted_train_df.groupby('day_year')['Predicted'].sum()
-    predicted_test_df = predicted_test_df.groupby('day_year')['Predicted'].sum()
+    train_data = train_data.groupby('Day_of_year')['Demand'].sum()
+    test_data = test_data.groupby('Day_of_year')['Demand'].sum()
+    predicted_train_df = predicted_train_df.groupby('Day_of_year')['Predicted'].sum()
+    predicted_test_df = predicted_test_df.groupby('Day_of_year')['Predicted'].sum()
 
     plt.title('Train')
     plt.plot(train_data)
@@ -332,12 +314,11 @@ def evaluate(metric, metric_name, true_values, predicted_values):
 def evaluation(model_name, train_data, test_data, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
 
-
     evaluate(mean_absolute_error, 'MAE', train_data['Demand'], train_prediction_df)
     evaluate(mean_squared_error, 'MSE', train_data['Demand'], train_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', train_data['Demand'], train_prediction_df)
 
-    print(f'{model_name} test scores:')
+    print(f'\n{model_name} test scores:')
 
     evaluate(mean_absolute_error, 'MAE', test_data['Demand'], test_prediction_df)
     evaluate(mean_squared_error, 'MSE', test_data['Demand'], test_prediction_df)

@@ -16,19 +16,19 @@ jupyter:
 <!-- #endregion -->
 
 ```{python id="AnwSHO1L97I5"}
-import catboost as cb
 import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import shap
+# import shap
 import xgboost as xgb
+import geopandas as gpd
 
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
-from sklearn.decomposition import PCA
 from sklearn.preprocessing import LabelEncoder
-import geopandas as gpd
+from sklearn.cluster import AgglomerativeClustering
 ```
 
 <!-- #region id="pSSMa3G2wGmF" -->
@@ -36,34 +36,27 @@ import geopandas as gpd
 <!-- #endregion -->
 
 ```{python id="zIkDLK9zwGmG"}
-INPUT_PATH = 'datasets/'
-ARIMA_PATH = 'statics/arima_predict.parquet'
-OUTPUT_PATH = 'results/xgb_predictions.parquet'
+INPUT_PATH = '../../../ride_data/'
+OUTPUT_PATH = '../../../results/xgb_predictions.parquet'
 
-RIDGE_TEST_PATH = 'results/ridge_test_predictions.parquet'
-RIDGE_TRAIN_PATH = 'results/ridge_train_predictions.parquet'
+RIDGE_TEST_PATH = '../../../ridge/ridge_test_predictions.parquet'
+RIDGE_TRAIN_PATH = '../../../ridge/ridge_train_predictions.parquet'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
-FEATURE_LIST = [#'ARIMA_predicts',
-                # 'borough',
-                
-                # 'Previous_week_trip_dist',
-                # 'Previous_2week_trip_dist',
-                # 'Previous_day_trip_dist',
-
-                # 'Previous_week_passenger_count',
-                # 'Previous_2week_passenger_count',
-                # 'Previous_day_passenger_count',
-
-                # 'Previous_week_fare_amount',
-                # 'Previous_day_fare_amount',
-                # 'Previous_2week_fare_amount',
+FEATURE_LIST = [
                 'Ridge_predict',
+
+                'Previous_week_max_demand',
+                'Previous_2week_max_demand',
 
                 'Previous_2week_demand',
                 'Previous_week_demand', 
+
+                'Previous_week_group_max_demand',
+                'Previous_week_group_min_demand',
+                'Previous_week_group_mean_demand',
 
                 'Previous_day_demand',
                 'Previous_2day_demand',
@@ -78,25 +71,12 @@ FEATURE_LIST = [#'ARIMA_predicts',
                 'Previous_12day_demand',
                 'Previous_13day_demand',
 
-                # 'Previous_week_extra',
-                # 'Previous_2week_extra',
-                # 'Previous_day_extra',
-                
-                # 'Previous_2week_RatecodeID',
-                # 'Previous_week_RatecodeID',
-                # 'Previous_day_RatecodeID',
-
-                # 'Previous_week_congestion_surcharge',
-                # 'Previous_2week_congestion_surcharge',
-                # 'Previous_day_congestion_surcharge',
-
-                # 'Day_of_month', 
-                # 'Day_of_week',
-                # 'Location'
+                #  'Day_of_month', 
+                #  'Day_of_week',
                 ]
 
 TEST_START_DATE = '2023-04-01'
-
+GROUP_NUM = 3
 AUTO_TUNE = False
 ```
 
@@ -144,10 +124,6 @@ ridge_df.head()
 ```{python}
 regions_df = gpd.read_file('taxi_zones/taxi_zones.shp')
 regions_df = regions_df.rename(columns = {'LocationID' : 'Location'})
-```
-
-```{python}
-regions_df['borough']
 ```
 
 <!-- #region id="X2ES_CY6-fb5" -->
@@ -202,12 +178,55 @@ labeled_df.head()
 labeled_df.to_parquet('labels.parquet')
 ```
 
+## Grouping Locations
+
+
+### Agglomerative Clustering
+
+```{python}
+location_demand_df = labeled_df.groupby('Location')['Demand'].max().to_frame('Demand').sort_values(by = 'Demand').reset_index()
+clustering = AgglomerativeClustering(n_clusters = GROUP_NUM).fit(location_demand_df['Demand'].to_numpy().reshape(-1, 1))
+```
+
+```{python}
+plt.scatter(location_demand_df['Demand'], location_demand_df['Location'], c = clustering.labels_)
+plt.show()
+```
+
+```{python}
+def group_locations(location_demand_df, group_num):
+    locations = [[] for i in range(group_num)]
+    for i in range(group_num):
+        demand_values = location_demand_df['Demand'].to_numpy().reshape(-1, 1)[clustering.labels_ == i]
+        locations[i].append(
+            location_demand_df[(location_demand_df['Demand'] >= np.min(demand_values))
+            &(location_demand_df['Demand'] <= np.max(demand_values))]['Location'].values)
+    
+    return locations
+```
+
+```{python}
+sorted_group_labels  = [i for i in range(GROUP_NUM)]
+```
+
+```{python}
+grouped_locations = group_locations(location_demand_df, GROUP_NUM)
+```
+
+```{python}
+grouped_locations_dfs = []
+for i in range(GROUP_NUM):
+    one_group_demand_df = grouped_locations[sorted_group_labels[i]][0]
+    one_group_demand_df = labeled_df[labeled_df['Location'].isin(one_group_demand_df)].reset_index(drop = True)
+    grouped_locations_dfs.append(one_group_demand_df)
+```
+
 <!-- #region id="G0W2pR-70JJb" -->
 ## Add Feature
 <!-- #endregion -->
 
 ```{python id="ifvk6uWS6hnT"}
-def feature_engineering(dataset, ridge_df):
+def feature_engineering(dataset):
     dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
     dataset['Previous_2day_demand'] = dataset.groupby(['Location'])['Demand'].shift(2)
     dataset['Previous_3day_demand'] = dataset.groupby(['Location'])['Demand'].shift(3)
@@ -223,35 +242,89 @@ def feature_engineering(dataset, ridge_df):
     dataset['Previous_13day_demand'] = dataset.groupby(['Location'])['Demand'].shift(13)
     dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
 
+    dataset['Previous_week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=7).max().reset_index(drop = True)
+    dataset['Previous_2week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=14).max().reset_index(drop = True)
+
+    data_per_date = []
+
+    # Get the unique dates from the DataFrame
+    unique_dates = dataset['Date'].unique()
+
+    # Number of days to look back (in this case, 7 days)
+    days_to_look_back = 7
+
+    # Iterate through each date
+    for date in unique_dates:
+        # Filter the DataFrame to get the 7 past day rows for the current date
+        past_7_days_df = dataset[dataset['Date'] >= date - pd.Timedelta(days=days_to_look_back)]
+        past_7_days_df = past_7_days_df[past_7_days_df['Date'] < date]
+        
+        # Convert the filtered DataFrame to a dictionary with location as keys and demand values as values
+        data_dict = past_7_days_df.set_index('Location')['Demand'].to_dict()
+        data_per_date.append(data_dict)
+
+    # Create an empty list to store the maximum demand for each date
+    max_demand_per_date = []
+    min_demand_per_date = []
+    mean_demand_per_date = []
+
+    # Iterate through the data_per_date list
+    for data_dict in data_per_date:
+        if data_dict:  # Check if the dictionary is not empty
+            max_demand_per_date.append(max(data_dict.values()))
+            min_demand_per_date.append(min(data_dict.values()))
+            mean_demand_per_date.append(np.mean(list(data_dict.values())))
+        else:
+            max_demand_per_date.append(None)
+            min_demand_per_date.append(None)
+            mean_demand_per_date.append(None)
+
+    # Convert the list to a numpy array
+    max_demand_per_date = np.array(max_demand_per_date)
+    min_demand_per_date = np.array(min_demand_per_date)
+    mean_demand_per_date = np.array(mean_demand_per_date)
+
+    max_demand_df = pd.DataFrame({'Date': unique_dates, 'Previous_week_group_max_demand': max_demand_per_date})
+    min_demand_df = pd.DataFrame({'Date': unique_dates, 'Previous_week_group_min_demand': min_demand_per_date})
+    mean_demand_df = pd.DataFrame({'Date': unique_dates, 'Previous_week_group_mean_demand': mean_demand_per_date})
+
+    dataset = dataset.merge(max_demand_df, on='Date')
+    dataset = dataset.merge(min_demand_df, on='Date')
+    dataset = dataset.merge(mean_demand_df, on='Date')
+
     dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
     dataset['Day_of_month'] = dataset['Date'].dt.day
-
-    dataset = (
-        dataset
-        .merge(ridge_df, how='left', on=['Location', 'Date'])
-        .rename(columns = {'Predicted_demand' : 'Ridge_predict'})
-        )
     
     return dataset
 ```
 
-```{python id="12zNfv8YwGmK"}
-features_df = feature_engineering(labeled_df, ridge_df)
-features_df.dropna(inplace = True)
+```{python}
+grouped_locations_features_dfs = []
+for i in range(GROUP_NUM):
+    one_group_features_df = feature_engineering(grouped_locations_dfs[i])
+    one_group_features_df = one_group_features_df.dropna().reset_index(drop = True)
+    one_group_features_df['Previous_week_group_max_demand'] = one_group_features_df['Previous_week_group_max_demand'].astype('float64')
+    one_group_features_df['Previous_week_group_min_demand'] = one_group_features_df['Previous_week_group_min_demand'].astype('float64')
+    one_group_features_df['Previous_week_group_mean_demand'] = one_group_features_df['Previous_week_group_mean_demand'].astype('float64')
+    grouped_locations_features_dfs.append(one_group_features_df)
+```
+
+```{python}
+features_df = pd.concat(grouped_locations_features_dfs, axis = 0)
+
+features_df = (
+        features_df
+        .merge(ridge_df, how='left', on=['Location', 'Date'])
+        .rename(columns = {'Predicted_demand' : 'Ridge_predict'})
+        )
+
+features_df = features_df.sort_values(by = ['Location', 'Date']).reset_index(drop = True)
+features_df = features_df
 ```
 
 ```{python id="bJxWEkiD3VOZ"}
 print(f'features dataframe shape : {features_df.shape}')
 features_df.head()
-```
-
-```{python}
-pca = PCA()
-pca.fit(features_df[FEATURE_LIST])
-
-
-cumsum = np.cumsum(pca.explained_variance_ratio_)
-cumsum, len(FEATURE_LIST), pca.feature_names_in_
 ```
 
 <!-- #region id="zN0kp6jw03DP" -->
@@ -269,13 +342,6 @@ def train_test_splitting(dataset, TEST_START_DATE):
 
 ```{python id="3xH4VMGNwGmK"}
 train_df, test_df = train_test_splitting(features_df, TEST_START_DATE)
-'''pca = PCA(n_components = 5)
-xtrain = pca.fit_transform(train_df[FEATURE_LIST])
-
-pca = PCA(n_components = 5)
-xtest = pca.fit_transform(test_df[FEATURE_LIST])
-
-pca.fit(features_df[FEATURE_LIST])'''
 ```
 
 ```{python id="xxGdRZfqwGmL"}
@@ -316,11 +382,11 @@ def grid_search(model, test_parameters, train_data, feature_list, cv = None):
 
 ```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
 if AUTO_TUNE:
-    params_test = {'learning_rate':[0.2, 0.15, 0.1, 0.05], 
-                'subsample':[0.6, 0.7, 0.8, 0.9, 1], 
-                'colsample_bytree':[0.6, 0.7, 0.8, 0.9, 1], 
-                'max_depth':[ 7, 8, 9, 10], 
-                'min_child_weight':[1, 10, 20, 30, 40, 50],
+    params_test = {'learning_rate':[0.15, 0.1, 0.05], 
+                'subsample':[0.7, 0.8, 0.9], 
+                'colsample_bytree':[0.7, 0.8, 0.9], 
+                'max_depth':[4, 5, 6], 
+                'min_child_weight':[10, 20, 30, 40],
                 }
     params = {"objective": "reg:squarederror"}
 
@@ -335,11 +401,11 @@ if AUTO_TUNE:
     print(best_params, best_score)
 else:
     best_params = {
-        'colsample_bytree': 0.7, 
-        'learning_rate': 0.05, 
-        'max_depth': 7, 
+        'colsample_bytree': 0.8, 
+        'learning_rate': 0.1, 
+        'max_depth': 6, 
         'min_child_weight': 20, 
-        'subsample': 0.8
+        'subsample': 0.9
         }
 ```
 
@@ -351,12 +417,8 @@ else:
 def model_predict(model, train_data, test_data, feature_list):
 
     model.fit(train_data[feature_list], train_data['Demand'])
-    '''model.fit(train_data[feature_list], train_data['Demand'], 
-            eval_set=[(test_data[feature_list], test_data['Demand'])], 
-            early_stopping_rounds=100)
-    print(np.min(model.evals_result()['validation_0']['rmse']))'''
-    train_predict_df  = model.predict(train_data[feature_list])
-    test_predict_df  = model.predict(test_data[feature_list])
+    train_predict_df = model.predict(train_data[feature_list])
+    test_predict_df = model.predict(test_data[feature_list])
 
     return train_predict_df, test_predict_df
 ```
@@ -370,35 +432,21 @@ train_prediction_df, test_prediction_df = model_predict(model, train_df, test_df
 ### Visualization
 <!-- #endregion -->
 
-```{python}
-def add_day_of_year(data):
-    data['day_year'] = 0
-    start_date = data['Date'].min()
-
-    for index, row in data.iterrows():
-
-        curr_date = row['Date']
-        day_number = (curr_date - start_date).days
-
-        data.at[index, 'day_year'] = day_number
-    return data
-```
-
 ```{python id="ao6nw8xsRvB9"}
 def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
 
-    train_data = add_day_of_year(train_data)
-    test_data = add_day_of_year(test_data)
+    train_data['Day_of_year'] = train_data['Date'].dt.dayofyear
+    test_data['Day_of_year'] = test_data['Date'].dt.dayofyear
 
     predicted_train_df = train_data
     predicted_test_df = test_data
     predicted_train_df['Predicted'] = train_prediction_df
     predicted_test_df['Predicted'] = test_prediction_df
 
-    train_data = train_data.groupby('day_year')['Demand'].sum()
-    test_data = test_data.groupby('day_year')['Demand'].sum()
-    predicted_train_df = predicted_train_df.groupby('day_year')['Predicted'].sum()
-    predicted_test_df = predicted_test_df.groupby('day_year')['Predicted'].sum()
+    train_data = train_data.groupby('Day_of_year')['Demand'].sum()
+    test_data = test_data.groupby('Day_of_year')['Demand'].sum()
+    predicted_train_df = predicted_train_df.groupby('Day_of_year')['Predicted'].sum()
+    predicted_test_df = predicted_test_df.groupby('Day_of_year')['Predicted'].sum()
 
     plt.title('Train')
     plt.plot(train_data)
@@ -427,32 +475,19 @@ def evaluate(metric, metric_name, true_values, predicted_values):
     print(f'{metric_name} : {metric(true_values, predicted_values)}')
 ```
 
-```{python}
-def smape(y_true, y_pred):
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    numerator = np.abs(y_pred - y_true)
-    denominator = (np.abs(y_true) + np.abs(y_pred))
-    smape = np.mean(numerator / denominator)
-    return smape * 100
-```
-
 ```{python id="v4-GWghuSbnA"}
 def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
 
-
     evaluate(mean_absolute_error, 'MAE', train_df['Demand'], train_prediction_df)
     evaluate(mean_squared_error, 'MSE', train_df['Demand'], train_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', train_df['Demand'], train_prediction_df)
-    evaluate(smape, 'smape', train_df['Demand'], train_prediction_df)
 
-    print(f'{model_name} test scores:')
+    print(f'\n{model_name} test scores:')
 
     evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
     evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
-    evaluate(smape, 'smape', test_df['Demand'], test_prediction_df)
 
 ```
 

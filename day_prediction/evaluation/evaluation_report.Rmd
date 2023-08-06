@@ -25,16 +25,15 @@ from tabulate import tabulate
 # Configs
 
 ```{python}
-LABELED_PATH = "data/results/labels.parquet"
-PREDICTED_XGB_PATH = "data/results/xgb_predictions.parquet"
-PREDICTED_RF_PATH = "data/results/rf_predictions.parquet"
-PREDICTED_RIDGE_PATH = "data/results/ridge_test_predictions.parquet"
-PREDICTED_VOTING_PATH = "data/results/voting_predictions.parquet"
+LABELED_PATH = '../../../data/labels.parquet'
+PREDICTED_XGB_PATH = '../../../results/xgb_predictions.parquet'
+PREDICTED_RF_PATH = '../../../results/rf_predictions.parquet'
+PREDICTED_RIDGE_PATH = '../../../ridge/ridge_test_predictions.parquet'
 TEST_START_DATE = '2023-04-01'
 TEST_START_DATE_BASE_LINE = '2023-03-25'
 HIGH_DEMAND_NUMS = 16
 MID_DEMAND_NUMS = 33
-SAVE_PLOT_PATH = 'data/pngs/'
+# SAVE_PLOT_PATH = 'data/pngs/'
 warnings.filterwarnings('ignore')
 ```
 
@@ -45,22 +44,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         }
         
     },
@@ -69,22 +65,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         }
         
     },    
@@ -93,22 +86,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         }
         
     },
@@ -117,26 +107,22 @@ report_dict = {
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_rf':None,
             'model_xgboost':None,
-            'model_ridge':None,
-            'model_voting':None
+            'model_ridge':None
         }
     },
-    
-    
+       
 }
 ```
 
@@ -146,8 +132,7 @@ predictions_dict = {
     'baseline_last_week':None,
     'model_rf':None,
     'model_xgboost':None,
-    'model_ridge':None,
-    'model_voting':None
+    'model_ridge':None
 }
 ```
 
@@ -156,8 +141,7 @@ sorted_locations_dict={
     'baseline_last_week':None,
     'model_rf':None,
     'model_xgboost':None,
-    'model_ridge':None,
-    'model_voting':None
+    'model_ridge':None
 }
 ```
 
@@ -305,10 +289,6 @@ print(test_df.shape)
 test_df.head()
 ```
 
-```{python}
-test_df
-```
-
 ## Load Predicted Data
 
 ```{python}
@@ -330,15 +310,8 @@ predictions_dict['model_rf'].head()
 ```
 
 ```{python}
-predictions_dict['model_voting'] = pd.read_parquet(PREDICTED_VOTING_PATH)
-print(predictions_dict['model_voting'].shape)
-predictions_dict['model_voting'].head()
-```
-
-```{python}
 pd.concat(
-    [predictions_dict['model_voting']['Predicted_demand'], 
-    predictions_dict['model_rf']['Predicted_demand'],
+    [predictions_dict['model_rf']['Predicted_demand'],
     predictions_dict['model_ridge']['Predicted_demand'],
     predictions_dict['model_xgboost']['Predicted_demand']], axis = 1
     )
@@ -401,12 +374,6 @@ print(predictions_dict['model_rf'].shape)
 predictions_dict['model_rf'].head()
 ```
 
-```{python}
-predictions_dict['model_voting'] = join_actual_predict(test_df,predictions_dict['model_voting'])
-print(predictions_dict['model_voting'].shape)
-predictions_dict['model_voting'].head()
-```
-
 ### Sort Locations by Demand
 
 ```{python}
@@ -422,10 +389,6 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
 sort_locations_on_demand(predictions_dict, sorted_locations_dict)
 print(sorted_locations_dict['model_xgboost'].shape)
 sorted_locations_dict['model_xgboost'].head()
-```
-
-```{python}
-predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
@@ -453,22 +416,15 @@ def calculate_error(actual_predicted_dict: dict):
             actual_predicted_df['percentage_error'] = (
                 actual_predicted_df['error']/actual_Demand_df
                 )*100
-            
 ```
 
 ```{python}
 calculate_error(predictions_dict)
-
 ```
 
 ```{python}
 print(predictions_dict['baseline_last_week'].shape)
 predictions_dict['baseline_last_week'].head()
-
-```
-
-```{python}
-predictions_dict['baseline_last_week'].tail()
 ```
 
 ```{python}
@@ -584,8 +540,8 @@ def plot_mape(predictions_mean_dict, per):
     axes[2].set_title('Models MAPE for other low demand locations', bbox=dict( alpha=0.5)) 
     axes[-1].set_title('Models MAPE for all locations', bbox=dict(alpha=0.5))
 
-    plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
-    plt.savefig(plot_name, format='svg', dpi=1200)  
+    # plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
+    # plt.savefig(plot_name, format='svg', dpi=1200)  
 
 ```
 
@@ -634,8 +590,8 @@ def plot_mae(predictions_mean_dict, per):
     axes[2].set_title('Models MAE for other low demand locations', bbox=dict( alpha=0.5)) 
     axes[-1].set_title('Models MAE for all locations', bbox=dict(alpha=0.5))
 
-    plot_name = SAVE_PLOT_PATH + 'ME_plot per '+per+'.svg'
-    plt.savefig(plot_name, format='svg', dpi=1200)  
+    # plot_name = SAVE_PLOT_PATH + 'ME_plot per '+per+'.svg'
+    # plt.savefig(plot_name, format='svg', dpi=1200)  
 
 ```
 
@@ -688,8 +644,8 @@ def plot_rmse(predictions_mean_dict, per):
     axes[2].set_title('Models RMSE for other low demand locations', bbox=dict( alpha=0.5)) 
     axes[-1].set_title('Models RMSE for all locations', bbox=dict(alpha=0.5))
 
-    plot_name = SAVE_PLOT_PATH + 'ME_plot per '+per+'.svg'
-    plt.savefig(plot_name, format='svg', dpi=1200)  
+    # plot_name = SAVE_PLOT_PATH + 'ME_plot per '+per+'.svg'
+    # plt.savefig(plot_name, format='svg', dpi=1200)  
 
 ```
 
@@ -749,11 +705,6 @@ df = pd.DataFrame(report_df,
                   index=pd.Index(report_df.index),
                   columns=pd.MultiIndex.from_product([['high_demand_locations', 'mid_demand_locations', 'low_demand_locations', 'all_locations'],
                                                       ['MAPE','MAE','RMSE']], names=['location category:', 'Error Metrics:']))
-
-```
-
-```{python}
-df
 ```
 
 ```{python}
