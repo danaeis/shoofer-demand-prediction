@@ -7,7 +7,8 @@ jupyter:
       format_version: '1.2'
       jupytext_version: 1.14.7
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
+    language: python
     name: python3
 ---
 
@@ -22,9 +23,13 @@ import numpy as np
 import pandas as pd
 import shap
 import xgboost as xgb
-
+import warnings
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
+```
+
+```{python}
+warnings.filterwarnings('ignore')
 ```
 
 <!-- #region id="pSSMa3G2wGmF" -->
@@ -32,23 +37,40 @@ from sklearn.model_selection import GridSearchCV
 <!-- #endregion -->
 
 ```{python id="zIkDLK9zwGmG"}
-INPUT_PATH = 'datasets/'
-ARIMA_PATH = 'statics/'
-OUTPUT_PATH = 'results/xgb_predictions.parquet'
+INPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/features_df_phase2.parquet'
+Ridge_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/Ridge_predictions_phase2.parquet'
+XGB_ridge_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_ridge_predictions_phase2.parquet'
+XGB_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_predictions_phase2.parquet'
+OUTPUT_PATH = XGB_PATH
 
-START_DATE = '2023-01-01'
-END_DATE = '2023-04-30'
+# FEATURE_menu = [
+#                 'previous_day_interval', 
+#                 'previous_2day_interval',
+#                 'previous_3day_interval',
+#                 'previous_4day_interval',
+#                 'previous_5day_interval',
+#                 'previous_6day_interval',
+#                 'previous_week_interval',
+#                 'previous_8day_interval',
+#                 'previous_9day_interval',
+#                 'previous_10day_interval',
+#                 'previous_11day_interval',
+#                 'previous_12day_interval',
+#                 'previous_13day_interval',
+#                 'previous_2week_interval'
+#                ]
 
-FEATURE_LIST = ['ARIMA_predicts', 
-                'Previous_2week_demand',
-                'Previous_week_demand', 
-                'Previous_day_demand', 
-                'Day_of_month', 
-                'Day_of_week']
+FEATURE_LIST = [
+                'previous_day_interval', 
+                'previous_week_interval',
+                'previous_2week_interval'
+               ]
+
 
 TEST_START_DATE = '2023-04-1'
 
-AUTO_TUNE = False
+AUTO_TUNE = True
+add_ridge_feature = True
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -60,113 +82,81 @@ AUTO_TUNE = False
 ## Load Data
 <!-- #endregion -->
 
-```{python id="HAyNjqxNwGmH"}
-def load_data(path, start_date: str, end_date: str):
-    df = pd.read_parquet(path)
-    start_date = datetime.date.fromisoformat(start_date)
-    end_date = datetime.date.fromisoformat(end_date)
-    filtered_df = df[(df['tpep_pickup_datetime'].dt.date >= start_date) &
-                     (df['tpep_pickup_datetime'].dt.date <= end_date)]
-    dataset = filtered_df.filter(items=['tpep_pickup_datetime', 'PULocationID'])
-    dataset['PU_date'] = pd.to_datetime(dataset['tpep_pickup_datetime'].dt.date)
-    return dataset
+```{python}
+def load_data(INPUT_PATH):
+    features_df = pd.read_parquet(INPUT_PATH, engine='pyarrow')
+    return features_df
 ```
 
 ```{python id="87BFHUu1-z73"}
-rides_df = load_data(INPUT_PATH, START_DATE, END_DATE)
+features_df = load_data(INPUT_PATH)
 ```
 
 ```{python id="hCN-11QT3bp1"}
-print(f'rides dataframe shape : {rides_df.shape}')
-rides_df.head()
+print(f'features dataframe shape : {features_df.shape}')
+features_df.head()
 ```
 
 ```{python}
-arima_df = pd.read_parquet(ARIMA_PATH)
+ridge_df = pd.read_parquet(Ridge_PATH)
 ```
 
 ```{python}
-print(f'rides dataframe shape : {arima_df.shape}')
-arima_df.head()
+print(f'rides dataframe shape : {ridge_df.shape}')
+ridge_df.head()
 ```
 
-<!-- #region id="X2ES_CY6-fb5" -->
-## Labeling
-<!-- #endregion -->
+## Add feature
 
-```{python id="a7mNMQ-zwGmH"}
-def labeling(dataset):
-    dataset_labels = (
-        dataset
-        .groupby(['PULocationID', 'PU_date'])['PU_date']
-        .count()
-        .to_frame('Demand')
-        .sort_values(['PULocationID', 'PU_date'], ascending=[True, True])
-        .reset_index()
-        .rename(columns={'PULocationID': 'Location', 'PU_date': 'Date'})
-    )
+```{python}
+def add_feature(dataset, lag_num):
+    
+    for i in range(1,lag_num+1):
+        if i not in(1,7):
+            dataset[f'previous_{i}day_interval'] = dataset.groupby('Location')['Demand'].shift(i*8)
 
-    locations = pd.DataFrame(dataset_labels['Location'].unique(), columns=['Location'])
-    dates = pd.DataFrame(dataset_labels['Date'].unique(), columns=['Date'])
-
-    location_date_df = (
-        locations
-        .merge(dates, how='cross')
-        .sort_values(['Location', 'Date'], ascending=[True, True])
-        .reset_index(drop=True)
-    )
-
-    labels_df = (
-        location_date_df
-        .merge(dataset_labels, how='left', on=['Location', 'Date'])
-        .fillna(value=0)
-    )
-
-    return labels_df
-
+    return dataset
 ```
 
-```{python id="VVRLakW_LeGp"}
-labeled_df = labeling(rides_df)
+```{python}
+new_features_df = add_feature(features_df, lag_num = 13)
+print(f'new features dataframe shape : {new_features_df.shape}')
+new_features_df.head()
 ```
 
-```{python id="0Gm5j5em28Xy"}
-print(f'labeled dataframe shape : {labeled_df.shape}')
-labeled_df.head()
-```
-
-<!-- #region id="G0W2pR-70JJb" -->
-## Add Feature
-<!-- #endregion -->
-
-```{python id="ifvk6uWS6hnT"}
-def feature_engineering(dataset, statics_df):
-    dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
-    dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
-    dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)
-
-    dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
-    dataset['Day_of_month'] = dataset['Date'].dt.day
-
-    dataset = dataset.sort_values(by = ['Date', 'Location'])
-    dataset['ARIMA_predicts'] = None
-    start_index = len(dataset) - len(statics_df)
-    end_index = len(dataset)
-    dataset.iloc[start_index:end_index, dataset.columns.get_loc('ARIMA_predicts')] = statics_df
-    dataset['ARIMA_predicts'] = dataset['ARIMA_predicts'].astype('float')
-    dataset = dataset.sort_values(by = ['Location', 'Date'])
+```{python}
+def feature_selection(dataset, FEATURE_LIST):
+    
+    dataset = dataset[['Location','Date','Hour_interval','Demand']+FEATURE_LIST]
+    dataset.dropna(inplace = True)
     
     return dataset
 ```
 
-```{python id="12zNfv8YwGmK"}
-features_df = feature_engineering(labeled_df, arima_df)
-features_df.dropna(inplace = True)
+```{python}
+selected_features_df = feature_selection(new_features_df, FEATURE_LIST)
+print(f'features dataframe shape : {selected_features_df.shape}')
+selected_features_df.head()
 ```
 
-```{python id="bJxWEkiD3VOZ"}
-print(f'features dataframe shape : {features_df.shape}')
-features_df.head()
+```{python}
+def join_ridge_feature(dataset, ridge_df, FEATURE_LIST):
+
+    dataset = dataset.merge(ridge_df, how='outer', on = ['Location','Date','Hour_interval'])
+    FEATURE_LIST.append('Predicted_demand')
+    
+    return dataset, FEATURE_LIST
+```
+
+```{python}
+if add_ridge_feature:
+    selected_features_df, FEATURE_LIST = join_ridge_feature(selected_features_df, ridge_df, FEATURE_LIST)
+    print(f'final features dataframe shape : {selected_features_df.shape}')
+selected_features_df.head()
+```
+
+```{python}
+print(f'Feature list: {FEATURE_LIST}') 
 ```
 
 <!-- #region id="zN0kp6jw03DP" -->
@@ -175,7 +165,7 @@ features_df.head()
 
 ```{python id="CMY1G1lmwGmI"}
 def train_test_splitting(dataset, TEST_START_DATE):
-
+    
     train_df = dataset[dataset['Date'] < TEST_START_DATE]
     test_df = dataset[dataset['Date'] >= TEST_START_DATE]
 
@@ -183,7 +173,7 @@ def train_test_splitting(dataset, TEST_START_DATE):
 ```
 
 ```{python id="3xH4VMGNwGmK"}
-train_df, test_df = train_test_splitting(features_df, TEST_START_DATE)
+train_df, test_df = train_test_splitting(selected_features_df, TEST_START_DATE)
 ```
 
 ```{python id="xxGdRZfqwGmL"}
@@ -224,11 +214,11 @@ def grid_search(model, test_parameters, train_data, feature_list, cv = None):
 
 ```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
 if AUTO_TUNE:
-    params_test = {'learning_rate':[0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01], 
-                'subsample':[0.8, 0.9, 1], 
-                'colsample_bytree':[0.6, 0.7, 0.8, 0.9, 1], 
+    params_test = {'learning_rate':[0.06, 0.03, 0.01], 
+                'subsample':[0.9], 
+                'colsample_bytree':[0.6, 0.8], 
                 'max_depth':[7], 
-                'gamma':[0, 1, 5],
+                'gamma':[5, 10],
                 'n_estimators':[1000]
                 }
     params = {"objective": "reg:squarederror"}
@@ -243,7 +233,7 @@ if AUTO_TUNE:
     
     print(best_params, best_score)
 else:
-    best_params = {'colsample_bytree': 0.6, 
+    best_params = {'colsample_bytree': 0.8, 
                    'gamma': 10, 
                    'learning_rate': 0.01, 
                    'max_depth': 7, 
@@ -276,47 +266,33 @@ train_prediction_df, test_prediction_df = model_predict(model, train_df, test_df
 ### Visualization
 <!-- #endregion -->
 
-```{python}
-def add_day_of_year(data):
-    data['day_year'] = 0
-    start_date = data['Date'].min()
-
-    for index, row in data.iterrows():
-
-        curr_date = row['Date']
-        day_number = (curr_date - start_date).days
-
-        data.at[index, 'day_year'] = day_number
-    return data
-```
-
 ```{python id="ao6nw8xsRvB9"}
 def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
-
-    train_data = add_day_of_year(train_data)
-    test_data = add_day_of_year(test_data)
 
     predicted_train_df = train_data
     predicted_test_df = test_data
     predicted_train_df['Predicted'] = train_prediction_df
     predicted_test_df['Predicted'] = test_prediction_df
+    
+    train_data = train_data.groupby(['Date','Hour_interval'])['Demand'].sum()
+    test_data = test_data.groupby(['Date','Hour_interval'])['Demand'].sum()
+    predicted_train_df = predicted_train_df.groupby(['Date','Hour_interval'])['Predicted'].sum()
+    predicted_test_df = predicted_test_df.groupby(['Date','Hour_interval'])['Predicted'].sum()
 
-    train_data = train_data.groupby('day_year')['Demand'].sum()
-    test_data = test_data.groupby('day_year')['Demand'].sum()
-    predicted_train_df = predicted_train_df.groupby('day_year')['Predicted'].sum()
-    predicted_test_df = predicted_test_df.groupby('day_year')['Predicted'].sum()
-
-    plt.title('Train')
-    plt.plot(train_data)
-    plt.plot(predicted_train_df)
-    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.figure(figsize=(30,10))
+    plt.title('Train', fontsize = 30)
+    plt.plot(range(1,len(train_data)+1), train_data)
+    plt.plot(range(1,len(train_data)+1), predicted_train_df)
+    plt.xlabel('time interval', fontsize = 15)
+    plt.legend(["Real Value", "Predicted"], loc ="lower right", fontsize = 15)
     plt.show()
 
-    plot_length = len(test_data)
-    plt.title('Test')
-    plt.plot(test_data)
-    plt.plot(predicted_test_df)
-    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.figure(figsize=(30,10))
+    plt.title('Test', fontsize = 30)
+    plt.plot(range(1,len(test_data)+1), test_data)
+    plt.plot(range(1,len(test_data)+1), predicted_test_df)
+    plt.xlabel('time interval', fontsize = 15)
+    plt.legend(["Real Value", "Predicted"], loc ="lower right", fontsize = 15)
     plt.show()
 ```
 
@@ -392,9 +368,8 @@ def save_predictions(dataset, path):
 
 ```{python}
 def prediction_labeling(pred_df, labeled_df):
-    pred_df = pd.DataFrame(pred_df, columns = ['Predicted_demand'])
     labeled_df.reset_index(inplace = True)
-    labeled_prediction_df = labeled_df[['Location', 'Date']]
+    labeled_prediction_df = labeled_df[['Location', 'Date', 'Hour_interval']]
     labeled_prediction_df['Predicted_demand'] = pred_df
     return labeled_prediction_df
 ```
@@ -409,5 +384,12 @@ labeled_prediction_df.head()
 ```
 
 ```{python}
+if add_ridge_feature:
+    OUTPUT_PATH = XGB_ridge_PATH
+
 save_predictions(labeled_prediction_df, OUTPUT_PATH)
+```
+
+```{python}
+
 ```
