@@ -1,0 +1,453 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.7
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Imports
+
+```{python}
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import xgboost as xgb
+
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
+from sklearn.model_selection import GridSearchCV
+
+```
+
+# Config
+
+```{python}
+INPUT_PATH = '../../data/labels.parquet'
+OUTPUT_PATH = '../../results/with_two_week_features/xgb_predictions.parquet'
+RIDGE_PATH = '../../ridge/with_two_week_features/'
+
+FEATURE_LIST = [
+    # 'Day_of_month','Day_of_week',
+    'Previous_week_demand',
+    'Previous_2week_demand',
+    'Relative_previous_day_demand',
+    'Relative_previous_2day_demand',
+    'Relative_previous_3day_demand',
+    'Relative_previous_4day_demand',
+    'Relative_previous_5day_demand',
+    'Relative_previous_6day_demand',
+    'Relative_previous_8day_demand',
+    'Relative_previous_9day_demand',
+    'Relative_previous_10day_demand',
+    'Relative_previous_11day_demand',
+    'Relative_previous_12day_demand',
+    'Relative_previous_13day_demand',
+    'Relative_ridge_demand']
+
+TEST_START_DATE = '2023-04-01'
+
+AUTO_TUNE = False
+```
+
+# Loading Dataset
+
+```{python}
+def load_data(path):
+    df = pd.read_parquet(path) 
+    return df
+```
+
+```{python}
+rides_df = load_data(INPUT_PATH)
+print(f'rides_df shape : {rides_df.shape}')
+rides_df.head()
+```
+
+```{python}
+ridge_df = (
+    load_data(RIDGE_PATH)
+    .sort_values(['Location', 'Date'], ascending=[True, True])
+    .reset_index(drop=True)
+    )
+
+ridge_df['Relative_ridge_demand'] = (
+    ridge_df['Predicted_demand']
+    /ridge_df.groupby(['Location'])['Predicted_demand'].shift(7)
+    )
+
+print(f'ridge_df shape : {ridge_df.shape}')
+ridge_df.head()
+```
+
+# Feature engineering
+
+```{python}
+def feature_engineering(dataset):    
+    dataset['Previous_week_demand'] = dataset.groupby(['Location'])['Demand'].shift(7)
+    dataset['Previous_2week_demand'] = dataset.groupby(['Location'])['Demand'].shift(14)  
+      
+    dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
+    dataset['Relative_previous_day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(1)
+        /dataset.groupby(['Location'])['Demand'].shift(8)
+        )
+    
+    dataset['Previous_2day_demand'] = dataset.groupby(['Location'])['Demand'].shift(2)
+    dataset['Relative_previous_2day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(2)
+        /dataset.groupby(['Location'])['Demand'].shift(9)
+        )
+    
+    dataset['Previous_3day_demand'] = dataset.groupby(['Location'])['Demand'].shift(3)
+    dataset['Relative_previous_3day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(3)
+        /dataset.groupby(['Location'])['Demand'].shift(10)
+        )
+    
+    dataset['Previous_4day_demand'] = dataset.groupby(['Location'])['Demand'].shift(4)
+    dataset['Relative_previous_4day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(4)
+        /dataset.groupby(['Location'])['Demand'].shift(11)
+        )
+    
+    dataset['Previous_5day_demand'] = dataset.groupby(['Location'])['Demand'].shift(5)
+    dataset['Relative_previous_5day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(5)
+        /dataset.groupby(['Location'])['Demand'].shift(12)
+        )
+    
+    dataset['Previous_6day_demand'] = dataset.groupby(['Location'])['Demand'].shift(6)
+    dataset['Relative_previous_6day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(6)
+        /dataset.groupby(['Location'])['Demand'].shift(13)
+        )
+    
+    dataset['Previous_8day_demand'] = dataset.groupby(['Location'])['Demand'].shift(8)
+    dataset['Relative_previous_8day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(8)
+        /dataset.groupby(['Location'])['Demand'].shift(15)
+        )
+    
+    dataset['Previous_9day_demand'] = dataset.groupby(['Location'])['Demand'].shift(9)
+    dataset['Relative_previous_9day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(9)
+        /dataset.groupby(['Location'])['Demand'].shift(16)
+        )
+    
+    dataset['Previous_10day_demand'] = dataset.groupby(['Location'])['Demand'].shift(10)
+    dataset['Relative_previous_10day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(10)
+        /dataset.groupby(['Location'])['Demand'].shift(17)
+        )
+    
+    dataset['Previous_11day_demand'] = dataset.groupby(['Location'])['Demand'].shift(11)
+    dataset['Relative_previous_11day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(11)
+        /dataset.groupby(['Location'])['Demand'].shift(18)
+        )
+    
+    dataset['Previous_12day_demand'] = dataset.groupby(['Location'])['Demand'].shift(12)
+    dataset['Relative_previous_12day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(12)
+        /dataset.groupby(['Location'])['Demand'].shift(19)
+        )
+    
+    dataset['Previous_13day_demand'] = dataset.groupby(['Location'])['Demand'].shift(13)
+    dataset['Relative_previous_13day_demand'] = (
+        dataset.groupby(['Location'])['Demand'].shift(13)
+        /dataset.groupby(['Location'])['Demand'].shift(20)
+        )
+    dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
+    dataset['Day_of_month'] = dataset['Date'].dt.day
+    return dataset
+```
+
+```{python}
+features_df = feature_engineering(rides_df)
+print(f'features_df shape : {features_df.shape}')
+features_df.head()
+```
+
+```{python}
+# features_df[features_df == np.inf].count()
+```
+
+## Fill inf
+
+```{python}
+inf_index_day = features_df[features_df['Relative_previous_day_demand'] == np.inf].index
+features_df['Relative_previous_day_demand'].loc[inf_index_day] = features_df['Previous_day_demand'].loc[inf_index_day]
+
+inf_index_2day = features_df[features_df['Relative_previous_2day_demand'] == np.inf].index
+features_df['Relative_previous_2day_demand'].loc[inf_index_2day] = features_df['Previous_2day_demand'].loc[inf_index_2day]
+
+inf_index_3day = features_df[features_df['Relative_previous_3day_demand'] == np.inf].index
+features_df['Relative_previous_3day_demand'].loc[inf_index_3day] = features_df['Previous_3day_demand'].loc[inf_index_3day]
+
+inf_index_4day = features_df[features_df['Relative_previous_4day_demand'] == np.inf].index
+features_df['Relative_previous_4day_demand'].loc[inf_index_4day] = features_df['Previous_4day_demand'].loc[inf_index_4day]
+
+inf_index_5day = features_df[features_df['Relative_previous_5day_demand'] == np.inf].index
+features_df['Relative_previous_5day_demand'].loc[inf_index_5day] = features_df['Previous_5day_demand'].loc[inf_index_5day]
+
+inf_index_6day = features_df[features_df['Relative_previous_6day_demand'] == np.inf].index
+features_df['Relative_previous_6day_demand'].loc[inf_index_6day] = features_df['Previous_6day_demand'].loc[inf_index_6day]
+
+inf_index_8day = features_df[features_df['Relative_previous_8day_demand'] == np.inf].index
+features_df['Relative_previous_8day_demand'].loc[inf_index_8day] = features_df['Previous_8day_demand'].loc[inf_index_8day]
+
+inf_index_9day = features_df[features_df['Relative_previous_9day_demand'] == np.inf].index
+features_df['Relative_previous_9day_demand'].loc[inf_index_9day] = features_df['Previous_9day_demand'].loc[inf_index_9day]
+
+inf_index_10day = features_df[features_df['Relative_previous_10day_demand'] == np.inf].index
+features_df['Relative_previous_10day_demand'].loc[inf_index_10day] = features_df['Previous_10day_demand'].loc[inf_index_10day]
+
+inf_index_11day = features_df[features_df['Relative_previous_11day_demand'] == np.inf].index
+features_df['Relative_previous_11day_demand'].loc[inf_index_11day] = features_df['Previous_11day_demand'].loc[inf_index_11day]
+
+inf_index_12day = features_df[features_df['Relative_previous_12day_demand'] == np.inf].index
+features_df['Relative_previous_12day_demand'].loc[inf_index_12day] = features_df['Previous_12day_demand'].loc[inf_index_12day]
+
+inf_index_13day = features_df[features_df['Relative_previous_13day_demand'] == np.inf].index
+features_df['Relative_previous_13day_demand'].loc[inf_index_13day] = features_df['Previous_13day_demand'].loc[inf_index_13day]
+```
+
+```{python}
+# features_df[features_df == np.inf].count()
+```
+
+```{python}
+features_df.fillna(value=0, inplace=True)
+
+print(features_df.shape)
+features_df.head()
+```
+
+```{python}
+final_features_df = (
+    features_df
+    .merge(ridge_df.filter(items=['Location', 'Date', 'Relative_ridge_demand']), how='left', on=['Location', 'Date'])
+    .rename(columns = {'Predicted_demand':'Ridge_predict'})
+    )
+
+final_features_df.dropna(inplace=True)
+
+print(f'final_features_df shape : {final_features_df.shape}')
+final_features_df.head()
+```
+
+```{python}
+# final_features_df[final_features_df == np.inf].count()
+```
+
+```{python}
+# final_features_df.isna().sum()
+```
+
+```{python}
+pca = PCA()
+pca.fit(final_features_df[FEATURE_LIST])
+
+
+cumsum = np.cumsum(pca.explained_variance_ratio_)
+cumsum, len(FEATURE_LIST), pca.feature_names_in_
+```
+
+# Modeling
+
+
+## Split Train and Test Data
+
+```{python}
+def train_test_splitting(dataset, TEST_START_DATE):
+
+    train_df = dataset[dataset['Date'] < TEST_START_DATE]
+    test_df = dataset[dataset['Date'] >= TEST_START_DATE]
+
+    return train_df, test_df
+```
+
+```{python}
+train_df, test_df = train_test_splitting(final_features_df, TEST_START_DATE)
+```
+
+```{python}
+print(f'train_df shape : {train_df.shape}')
+train_df.head()
+```
+
+```{python}
+print(f'test_df shape : {test_df.shape}')
+test_df.head()
+```
+
+## Gradient Boosting Regressor
+
+
+### Model Tuning
+
+```{python}
+def grid_search(model, test_parameters, train_data, feature_list, cv = None):
+    gs = GridSearchCV(
+        estimator = model, 
+        param_grid = test_parameters, 
+        scoring = 'neg_root_mean_squared_error', 
+        cv = cv, 
+        n_jobs = -1
+        )
+    
+    gs.fit(train_data[feature_list], train_data['Demand'])
+    return gs.best_params_, gs.best_score_
+```
+
+```{python}
+if AUTO_TUNE:
+    params_test = {
+                'learning_rate':[0.15, 0.1, 0.05], 
+                'subsample':[0.7, 0.8, 0.9], 
+                'colsample_bytree':[0.6, 0.7, 0.8], 
+                'max_depth':[4, 5, 6], 
+                'min_child_weight':[10, 20, 30],
+                }
+    params = {"objective": "reg:squarederror"}
+
+    best_params, best_score = grid_search(
+        model = xgb.XGBRegressor(**params), 
+        test_parameters = params_test,
+        train_data = train_df, 
+        feature_list = FEATURE_LIST, 
+        cv = 3
+        )
+    
+    print(best_params, best_score)
+    
+else:
+    best_params = {
+        'colsample_bytree': 0.8, 
+        'learning_rate': 0.05, 
+        'max_depth': 6, 
+        'min_child_weight': 20, 
+        'subsample': 0.7
+        }
+```
+
+### Prediction
+
+```{python}
+def model_predict(model, train_data, test_data, feature_list):
+
+    model.fit(train_data[feature_list], train_data['Demand'])
+    train_predict_df = model.predict(train_data[feature_list])
+    test_predict_df = model.predict(test_data[feature_list])
+
+    return train_predict_df, test_predict_df
+```
+
+```{python}
+model = xgb.XGBRegressor(**best_params)
+train_prediction_df, test_prediction_df = model_predict(model, train_df, test_df, FEATURE_LIST)
+```
+
+### Visualization
+
+```{python}
+def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
+    
+    train_data['Day_of_year'] = train_data['Date'].dt.dayofyear
+    test_data['Day_of_year'] = test_data['Date'].dt.dayofyear
+    
+    predicted_train_df = train_data
+    predicted_test_df = test_data
+    predicted_train_df['Predicted'] = train_prediction_df
+    predicted_test_df['Predicted'] = test_prediction_df
+
+    train_data = train_data.groupby('Day_of_year')['Demand'].sum()
+    test_data = test_data.groupby('Day_of_year')['Demand'].sum()
+    predicted_train_df = predicted_train_df.groupby('Day_of_year')['Predicted'].sum()
+    predicted_test_df = predicted_test_df.groupby('Day_of_year')['Predicted'].sum()
+
+    plt.title('Train')
+    plt.plot(train_data)
+    plt.plot(predicted_train_df)
+    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.show()
+
+    plot_length = len(test_data)
+    plt.title('Test')
+    plt.plot(test_data)
+    plt.plot(predicted_test_df)
+    plt.legend(["Real Value", "Predicted"], loc ="lower right")
+    plt.show()
+
+```
+
+```{python}
+prediction_visualization(train_df, test_df, train_prediction_df, test_prediction_df)
+```
+
+### Evaluation
+
+```{python}
+def evaluate(metric, metric_name, true_values, predicted_values):
+    print(f'{metric_name} : {metric(true_values, predicted_values)}')
+```
+
+```{python}
+def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df):
+    print(f'{model_name} train scores:')
+
+    evaluate(mean_absolute_error, 'MAE', train_df['Demand'], train_prediction_df)
+    evaluate(mean_squared_error, 'MSE', train_df['Demand'], train_prediction_df)
+    # evaluate(mean_absolute_percentage_error, 'MAPE', train_df['Demand'], train_prediction_df)
+
+    print(f'\n{model_name} test scores:')
+
+    evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
+    evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
+    # evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
+```
+
+```{python}
+evaluation('XGB', train_df, test_df, train_prediction_df, test_prediction_df)
+```
+
+### Feature Importance and SHAPE
+
+```{python}
+xgb.plot_importance(model)
+plt.show()
+```
+
+# File saving
+
+```{python}
+def save_predictions(dataset, path):
+    dataset.to_parquet(path, index=False)
+```
+
+```{python}
+def prediction_labeling(pred_df, labeled_df):
+    pred_df = pd.DataFrame(pred_df, columns = ['Predicted_demand'])
+    labeled_df.reset_index(inplace = True)
+    labeled_prediction_df = labeled_df[['Location', 'Date']]
+    labeled_prediction_df['Predicted_demand'] = pred_df
+    return labeled_prediction_df
+```
+
+```{python}
+labeled_prediction_df = prediction_labeling(test_prediction_df, test_df)
+print(f'labeled_prediction_df shape : {labeled_prediction_df.shape}')
+labeled_prediction_df.head()
+```
+
+```{python}
+save_predictions(labeled_prediction_df, OUTPUT_PATH)
+```
