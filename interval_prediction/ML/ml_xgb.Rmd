@@ -43,24 +43,45 @@ XGB_ridge_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-de
 XGB_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_predictions_phase2.parquet'
 OUTPUT_PATH = XGB_PATH
 
-# FEATURE_menu = [
-#                 'previous_day_interval', 
-#                 'previous_2day_interval',
-#                 'previous_3day_interval',
-#                 'previous_4day_interval',
-#                 'previous_5day_interval',
-#                 'previous_6day_interval',
-#                 'previous_week_interval',
-#                 'previous_8day_interval',
-#                 'previous_9day_interval',
-#                 'previous_10day_interval',
-#                 'previous_11day_interval',
-#                 'previous_12day_interval',
-#                 'previous_13day_interval',
-#                 'previous_2week_interval'
-#                ]
+# FEATURE_menu = ['time',
+
+                # 'Predicted_demand',
+                
+               #  'day_of_week',
+               #  'day_of_month',
+                
+               #  'max_previous_week_interval',
+               #  'max_previous_2week_interval',
+    
+               #  'max_previous_7exact_interval',
+               #  'max_previous_14exact_interval',
+    
+               #  'previous_day_interval',
+               #  'previous_2day_interval',
+               #  'previous_3day_interval',
+               #  'previous_4day_interval',
+               #  'previous_5day_interval',
+               #  'previous_6day_interval',
+               #  'previous_week_interval',
+               #  'previous_8day_interval',
+               #  'previous_9day_interval',
+               #  'previous_10day_interval',
+               #  'previous_11day_interval',
+               #  'previous_12day_interval',
+               #  'previous_13day_interval',
+               #  'previous_2week_interval'
+               # ]
 
 FEATURE_LIST = [
+                'day_of_week',
+                'day_of_month',
+                
+                'max_previous_week_interval',
+                'max_previous_2week_interval',
+    
+                'max_previous_7exact_interval',
+                'max_previous_14exact_interval',
+    
                 'previous_day_interval',
                 'previous_2day_interval',
                 'previous_3day_interval',
@@ -79,6 +100,7 @@ FEATURE_LIST = [
 
 
 TEST_START_DATE = '2023-04-1'
+NUM_INTERVAL_PER_DAY = 8
 
 AUTO_TUNE = False
 add_ridge_feature = False
@@ -124,9 +146,25 @@ def add_feature(dataset, lag_num):
     
     for i in range(1,lag_num+1):
         if i not in(1,7):
-            dataset[f'previous_{i}day_interval'] = dataset.groupby('Location')['Demand'].shift(i*8)
+            dataset[f'previous_{i}day_interval'] = dataset.groupby('Location')['Demand'].shift(i*NUM_INTERVAL_PER_DAY)
 
+    dataset['max_previous_week_interval'] = dataset.groupby('Location')['Demand'].rolling(window = 7*NUM_INTERVAL_PER_DAY).max().reset_index(drop=True)
+    dataset['max_previous_2week_interval'] = dataset.groupby('Location')['Demand'].rolling(window = 14*NUM_INTERVAL_PER_DAY).max().reset_index(drop=True)
+
+    dataset['day_of_week'] = dataset['Date'].dt.dayofweek
+    dataset['day_of_month'] = dataset['Date'].dt.day
+
+    dataset['time'] = dataset['Hour_interval']
+
+    df = dataset.sort_values(['Location','Hour_interval','Date'])[['Location','Hour_interval','Date','Demand']]
+    df['max_previous_7exact_interval'] = dataset.groupby(['Location','Hour_interval'])['Demand'].rolling(window = 7).max().values
+    dataset['max_previous_7exact_interval'] = df.sort_values(['Location', 'Date','Hour_interval'])['max_previous_7exact_interval']
+    df['max_previous_14exact_interval'] = dataset.groupby(['Location','Hour_interval'])['Demand'].rolling(window = 14).max().values
+    dataset['max_previous_14exact_interval'] = df.sort_values(['Location', 'Date','Hour_interval'])['max_previous_14exact_interval']
+    
     return dataset
+
+
 ```
 
 ```{python}
@@ -164,10 +202,6 @@ if add_ridge_feature:
     selected_features_df, FEATURE_LIST = join_ridge_feature(selected_features_df, ridge_df, FEATURE_LIST)
     print(f'final features dataframe shape : {selected_features_df.shape}')
 selected_features_df.head()
-```
-
-```{python}
-print(f'Feature list: {FEATURE_LIST}') 
 ```
 
 <!-- #region id="zN0kp6jw03DP" -->
@@ -225,12 +259,12 @@ def grid_search(model, test_parameters, train_data, feature_list, cv = None):
 
 ```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
 if AUTO_TUNE:
-    params_test = {'learning_rate':[0.06, 0.03, 0.01], 
-                'subsample':[0.9], 
-                'colsample_bytree':[0.6, 0.8], 
-                'max_depth':[7], 
-                'gamma':[5, 10],
-                'n_estimators':[1000]
+    params_test = {'learning_rate':[0.006, 0.01], 
+                'subsample':[0.9, 1], 
+                'colsample_bytree':[0.8, 0.9], 
+                'max_depth':[7,8], 
+                'gamma':[10],
+                'n_estimators':[1000,1700]
                 }
     params = {"objective": "reg:squarederror"}
 
@@ -244,12 +278,12 @@ if AUTO_TUNE:
     
     print(best_params, best_score)
 else:
-    best_params = {'colsample_bytree': 0.8, 
+    best_params = {'colsample_bytree': 0.9, 
                    'gamma': 10, 
                    'learning_rate': 0.01, 
                    'max_depth': 7, 
                    'subsample': 0.9, 
-                   'n_estimators': 1000
+                   'n_estimators': 1700
                    }
 ```
 
@@ -363,11 +397,11 @@ plt.show()
 ```
 
 ```{python id="50CEqbp75Y_i", outputId="b7288f1d-517a-4707-da22-ad996453f161"}
-# dtrain_reg = xgb.DMatrix(train_df[FEATURE_LIST].values, train_df['Demand'].values, enable_categorical=True)
+dtrain_reg = xgb.DMatrix(train_df[FEATURE_LIST].values, train_df['Demand'].values, enable_categorical=True)
 
-# explainer = shap.TreeExplainer(model)
-# shap_values = explainer.shap_values(dtrain_reg)
-# shap.summary_plot(shap_values, train_df[FEATURE_LIST])
+explainer = shap.TreeExplainer(model)
+shap_values = explainer.shap_values(dtrain_reg)
+shap.summary_plot(shap_values, train_df[FEATURE_LIST])
 ```
 
 # File Saving

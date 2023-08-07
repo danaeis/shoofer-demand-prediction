@@ -39,28 +39,26 @@ warnings.filterwarnings('ignore')
 INPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/features_df_phase2.parquet'
 OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/Ridge_predictions_phase2.parquet'
 
-START_DATE = '2023-01-01'
-END_DATE = '2023-04-30'
 
 FEATURE_LIST = [
-                'previous_day_interval', 
-                'previous_2day_interval', 
-                'previous_3day_interval', 
-                'previous_4day_interval', 
-                'previous_5day_interval', 
+                'previous_day_interval',
+                'previous_2day_interval',
+                'previous_3day_interval',
+                'previous_4day_interval',
+                'previous_5day_interval',
                 'previous_6day_interval',
                 'previous_week_interval',
-                'previous_8day_interval', 
-                'previous_9day_interval', 
-                'previous_10day_interval', 
-                'previous_11day_interval', 
-                'previous_12day_interval', 
-                'previous_13day_interval', 
+                'previous_8day_interval',
+                'previous_9day_interval',
+                'previous_10day_interval',
+                'previous_11day_interval',
+                'previous_12day_interval',
+                'previous_13day_interval',
                 'previous_2week_interval'
                ]
 
 TEST_START_DATE = '2023-04-1'
-
+NUM_INTERVAL_PER_DAY = 8
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -95,7 +93,21 @@ def add_feature(dataset, lag_num):
     for i in range(1,lag_num+1):
         if i not in(1,7):
             dataset[f'previous_{i}day_interval'] = dataset.groupby('Location')['Demand'].shift(i*8)
+            
+    dataset['max_previous_week_interval'] = dataset.groupby('Location')['Demand'].rolling(window = 7*NUM_INTERVAL_PER_DAY).max().reset_index(drop=True)
+    dataset['max_previous_2week_interval'] = dataset.groupby('Location')['Demand'].rolling(window = 14*NUM_INTERVAL_PER_DAY).max().reset_index(drop=True)
 
+    dataset['day_of_week'] = dataset['Date'].dt.dayofweek
+    dataset['day_of_month'] = dataset['Date'].dt.day
+
+    dataset['time'] = dataset['Hour_interval']
+
+    df = dataset.sort_values(['Location','Hour_interval','Date'])[['Location','Hour_interval','Date','Demand']]
+    df['max_previous_7exact_interval'] = dataset.groupby(['Location','Hour_interval'])['Demand'].rolling(window = 7).max().values
+    dataset['max_previous_7exact_interval'] = df.sort_values(['Location', 'Date','Hour_interval'])['max_previous_7exact_interval']
+    df['max_previous_14exact_interval'] = dataset.groupby(['Location','Hour_interval'])['Demand'].rolling(window = 14).max().values
+    dataset['max_previous_14exact_interval'] = df.sort_values(['Location', 'Date','Hour_interval'])['max_previous_14exact_interval']
+    
     return dataset
 ```
 
@@ -175,7 +187,7 @@ def grid_search(model, test_parameters, train_data, cv = None, feature_list = FE
 model = Ridge()
 best_params, best_score = grid_search(
     model, 
-    {'alpha':[1000,5000,10000]},
+    {'alpha':[10000,50000,100000]},
     train_df, 
     cv = 5, 
     feature_list = FEATURE_LIST
