@@ -4,12 +4,11 @@ from sklearn.model_selection import GridSearchCV
 import xgboost as xgb
 
 class Train_xgb_model():
-    def __init__(self, dataset, prediction_date):
+    def __init__(self, train, predict, prediction_date):
         self.prediction_date = prediction_date
-        self.train_df = dataset
-        # self.TEST_START_DATE = test_start_date
-        # self.train_df = dataset[dataset['Date'] < self.TEST_START_DATE]
-        # self.test_df = dataset[dataset['Date'] >= self.TEST_START_DATE]
+        self.PREDICT_PATH = '/home/saadi/DS/shoofer_demand_deploy/data/predictions/predicted.parquet'
+        self.train_dataset = train
+        self.predict_dataset = predict
         self.AUTO_TUNE = False
         self.FEATURE_LIST = [
                 # 'ARIMA_predicts', 
@@ -62,11 +61,11 @@ class Train_xgb_model():
                 
 
     def model_predict(self):
-        # if model is not saved
-        self.tune_model(self)
+        self.tune_model()
         self.model = xgb.XGBRegressor(**self.best_params)
-        self.model.fit(self.train_df[self.feature_list], self.train_df['Demand'])
-        # save model
-        test_predict_df  = self.model.predict(self.test_data[self.feature_list])
-
-        return test_predict_df
+        self.model.fit(self.train_dataset[self.FEATURE_LIST], self.train_dataset['Demand'])
+        predict_demands  = self.model.predict(self.predict_dataset[self.FEATURE_LIST])
+        self.predicted_df = self.predict_dataset[['Date','Location']]
+        self.predicted_df['Predicted_demand'] = predict_demands
+        self.predicted_df.to_parquet(self.PREDICT_PATH)
+        

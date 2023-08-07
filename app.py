@@ -23,7 +23,7 @@ def root():
 @app.post("/demand_predict")
 def demand_predict(prediction_date: prediction_date):
     training_model = Demand_Prediction_Model(prediction_date.date)
-    trained_model = training_model.check()
+    trained_model = training_model.predict_model()
     return trained_model
     predicts = trained_model
 

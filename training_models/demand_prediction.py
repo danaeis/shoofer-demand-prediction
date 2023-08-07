@@ -1,16 +1,14 @@
 import pandas as pd
-from prepairing_data.labels import Label_data
-# from xgb_model import Train_xgb_model
+from prepairing_data.labels import Label_Data
+from training_models.xgb_model import Train_xgb_model
 
 class Demand_Prediction_Model():
     def __init__(self, prediction_date):
-        self.period = 1
+        self.period = 3
         self.prediction_date = prediction_date
-        labeling_data = Label_data(self.prediction_date,self.period)
+        labeling_data = Label_Data(self.prediction_date,self.period)
         self.labeled_dataset = labeling_data.labeling()
-        # print(self.labeled_dataset)
         self.model_dataset = labeling_data.add_features()
-        # self.model_dataset = None
 
     def check(self):
         print("in check", (self.labeled_dataset).shape)
@@ -22,5 +20,9 @@ class Demand_Prediction_Model():
                 
                 }
         # print(self.model_dataset[self.model_dataset['Date']==pd.to_datetime(self.prediction_date)])
-    # def predict_model(self):
-    #     training_model = Train_xgb_model(self, self.model_dataset, self.prediction_date)
+    def predict_model(self):
+        self.train_dataset = self.model_dataset[~self.model_dataset['Demand'].isna()]
+        self.predict_dataset = self.model_dataset[self.model_dataset['Demand'].isna()]
+        training_model = Train_xgb_model(self.train_dataset, self.predict_dataset, self.prediction_date)
+        training_model.model_predict()
+        # return training_model
