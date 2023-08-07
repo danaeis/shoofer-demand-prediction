@@ -10,5 +10,6 @@ class Get_Demand():
         prediction_date = datetime.date.fromisoformat(str(date.date))
         demand = pd.read_parquet(self.PREDICTION_PATH,
                                  filters=[('Date','=',prediction_date),
-                                        ('Location','=',int(location_id))]).set_index('Location')
-        return {"demand":demand['Predicted_demand']}
+                                        ('Location','=',int(location_id))]).reset_index(drop=True)
+        
+        return {"location":location_id,"predicted_demand":int(demand['Predicted_demand'])}
