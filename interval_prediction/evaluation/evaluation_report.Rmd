@@ -29,16 +29,21 @@ from tabulate import tabulate
 ```{python}
 LABELED_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/labels_phase2.parquet"
 PREDICTED_XGB_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_predictions_phase2.parquet"
-PREDICTED_XGB_Ridge_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_ridge_predictions_phase2.parquet"
+PREDICTED_XGB_RIDGE_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_ridge_predictions_phase2.parquet"
 PREDICTED_REGRESSION_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/Ridge_predictions_phase2.parquet"
+PREDICTED_SVR_RIDGE_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/SVR_ridge_predictions_phase2.parquet'
+
 SAVE_PLOT_PATH = '/Users/maedeh/Desktop/data/pngs/'
 
 
 TEST_START_DATE = '2023-04-01'
 LAST_WEEK_TEST_START_DATE = '2023-03-25'
 
-HIGH_DEMAND_NUMS = 14
-MID_DEMAND_NUMS = 26
+
+HIGH_DEMAND_NUMS = 55
+MID_DEMAND_NUMS = 157
+sort_method = 'mean'
+
 
 warnings.filterwarnings('ignore')
 ```
@@ -50,19 +55,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         }
         
     },
@@ -71,19 +76,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         }
         
     },    
@@ -92,19 +97,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         }
         
     },
@@ -113,19 +118,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            'model_xgboost_ridge':None
+            # 'model_xgboost_ridge':None
         }
     },
     
@@ -144,10 +149,7 @@ predictions_dict = {
 
 ```{python}
 sorted_locations_dict={
-    'baseline_last_week':None,
-    'model_regression':None,
-    'model_xgboost':None,
-    'model_xgboost_ridge':None
+    'sorted_index':None,
 }
 ```
 
@@ -308,9 +310,9 @@ predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
-predictions_dict['model_xgboost_ridge'] = pd.read_parquet(PREDICTED_XGB_Ridge_PATH)
-print(predictions_dict['model_xgboost_ridge'].shape)
-predictions_dict['model_xgboost_ridge'].head()
+# predictions_dict['model_xgboost_ridge'] = pd.read_parquet(PREDICTED_SVR_RIDGE_PATH)
+# print(predictions_dict['model_xgboost_ridge'].shape)
+# predictions_dict['model_xgboost_ridge'].tail()
 ```
 
 ```{python}
@@ -348,32 +350,35 @@ predictions_dict['baseline_last_week'].head()
 
 ```{python}
 def join_actual_predict(actual_df, predicted_df):
-    actual_predicted_df = actual_df.merge(predicted_df, how='left', on=['Location', 'Date', 'Hour_interval'])
-    actual_predicted_df['Date'] = pd.to_datetime(actual_predicted_df['Date'])
-    actual_predicted_df['day_of_week'] = actual_predicted_df['Date'].dt.dayofweek
-    return actual_predicted_df
+    for label,predictions_df in predicted_df.items():
+        if (predictions_df is not None):
+            actual_predicted_df = actual_df.merge(predictions_df, how='left', on=['Location', 'Date', 'Hour_interval'])
+            actual_predicted_df['Date'] = pd.to_datetime(actual_predicted_df['Date'])
+            actual_predicted_df['day_of_week'] = actual_predicted_df['Date'].dt.dayofweek
+            predictions_dict[label] = actual_predicted_df
+
 ```
 
 ```{python}
-predictions_dict['baseline_last_week'] = join_actual_predict(test_df,predictions_dict['baseline_last_week'])
+join_actual_predict(test_df,predictions_dict)
+```
+
+```{python}
 print(predictions_dict['baseline_last_week'].shape)
 predictions_dict['baseline_last_week'].head()
 ```
 
 ```{python}
-predictions_dict['model_xgboost'] = join_actual_predict(test_df,predictions_dict['model_xgboost'])
 print(predictions_dict['model_xgboost'].shape)
 predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
-predictions_dict['model_xgboost_ridge'] = join_actual_predict(test_df,predictions_dict['model_xgboost_ridge'])
-print(predictions_dict['model_xgboost_ridge'].shape)
-predictions_dict['model_xgboost_ridge'].head()
+# print(predictions_dict['model_xgboost_ridge'].shape)
+# predictions_dict['model_xgboost_ridge'].head()
 ```
 
 ```{python}
-predictions_dict['model_regression'] = join_actual_predict(test_df,predictions_dict['model_regression'])
 print(predictions_dict['model_regression'].shape)
 predictions_dict['model_regression'].head()
 ```
@@ -382,11 +387,11 @@ predictions_dict['model_regression'].head()
 
 ```{python}
 def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
-    for label,predictions_df in predictions_dict.items():
-        if (predictions_df is not None):
-            sorted_index = predictions_df.groupby('Location')['Demand'].aggregate(['sum']).sort_values('sum', ascending=False)
-            sorted_index = sorted_index.reset_index()
-            sorted_locations_dict[label] = sorted_index
+    predictions_df = predictions_dict['baseline_last_week']
+    if (predictions_df is not None):
+        sorted_index = predictions_df.groupby(['Location','Hour_interval'])['Demand'].aggregate([sort_method]).sort_values(sort_method, ascending=False)
+        sorted_index = sorted_index.reset_index()
+        sorted_locations_dict['sorted_index'] = sorted_index
             
 ```
 
@@ -395,23 +400,8 @@ sort_locations_on_demand(predictions_dict, sorted_locations_dict)
 ```
 
 ```{python}
-print(sorted_locations_dict['baseline_last_week'].shape)
-sorted_locations_dict['baseline_last_week'].head()
-```
-
-```{python}
-print(sorted_locations_dict['model_xgboost'].shape)
-sorted_locations_dict['model_xgboost'].head()
-```
-
-```{python}
-print(sorted_locations_dict['model_xgboost_ridge'].shape)
-sorted_locations_dict['model_xgboost_ridge'].head()
-```
-
-```{python}
-print(sorted_locations_dict['model_regression'].shape)
-sorted_locations_dict['model_regression'].head()
+print(sorted_locations_dict['sorted_index'].shape)
+sorted_locations_dict['sorted_index'].head()
 ```
 
 # Mean error Calculation
@@ -438,7 +428,6 @@ def calculate_error(actual_predicted_dict: dict):
 
 ```{python}
 calculate_error(predictions_dict)
-
 ```
 
 ```{python}
@@ -452,8 +441,8 @@ predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
-print(predictions_dict['model_xgboost_ridge'].shape)
-predictions_dict['model_xgboost_ridge'].head()
+# print(predictions_dict['model_xgboost_ridge'].shape)
+# predictions_dict['model_xgboost_ridge'].head()
 ```
 
 ```{python}
@@ -464,14 +453,21 @@ predictions_dict['model_regression'].head()
 ### Aggregate Error Columns
 
 ```{python}
+sorted_index = sorted_locations_dict['sorted_index'][['Location', 'Hour_interval']][HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:]
+len(sorted_index)
+```
+
+```{python}
 def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dict):
     per_columns=['Location', 'Date', 'Hour_interval', 'day_of_week']
     for model,actual_predicted_df in actual_predicted_dict.items():
         if (actual_predicted_df is not None):
-            sorted_index = sorted_locations_dict[model]['Location']
-            high_demand_actual_predicted_df = actual_predicted_df.loc[actual_predicted_df['Location'].isin(sorted_index[:HIGH_DEMAND_NUMS])]
-            mid_demand_actual_predicted_df = actual_predicted_df.loc[actual_predicted_df['Location'].isin(sorted_index[HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS])]
-            low_demand_actual_predicted_df = actual_predicted_df.loc[actual_predicted_df['Location'].isin(sorted_index[HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:])]
+            sorted_index = sorted_locations_dict['sorted_index'][['Location', 'Hour_interval']]
+            high_demand_actual_predicted_df = actual_predicted_df.merge(sorted_index[:HIGH_DEMAND_NUMS], on=['Location','Hour_interval'])
+            mid_demand_actual_predicted_df = actual_predicted_df.merge(sorted_index[HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS], on=['Location','Hour_interval'])
+            low_demand_actual_predicted_df = actual_predicted_df.merge(sorted_index[HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:], on=['Location','Hour_interval'])
+            
+    
             for per in per_columns:
                 high_demand_error_df = high_demand_actual_predicted_df[[per,'Demand','error','squared_error', 'percentage_error']] 
                 mid_demand_error_df = mid_demand_actual_predicted_df[[per,'Demand','error','squared_error','percentage_error']] 
@@ -503,18 +499,39 @@ def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dic
                 mid_demand_mean_df['mape'] = np.where(mid_demand_mean_df['mape']>100, 100, mid_demand_mean_df['mape'])
                 low_demand_mean_df['mape'] = np.where(low_demand_mean_df['mape']>100, 100, low_demand_mean_df['mape'])
                 all_mean_df['mape'] = np.where(all_mean_df['mape']>100, 100, all_mean_df['mape'])
+
+                
                 if per == 'Location':
-                    high_demand_mean_df = high_demand_mean_df.reindex(sorted_index[:HIGH_DEMAND_NUMS])
-                    mid_demand_mean_df = mid_demand_mean_df.reindex(sorted_index[HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS])
-                    low_demand_mean_df = low_demand_mean_df.reindex(sorted_index[HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:])
-                    all_mean_df = all_mean_df.reindex(sorted_index)
+                    high_loc_demand_index = sorted_locations_dict['sorted_index'][:HIGH_DEMAND_NUMS].groupby(['Location'])[sort_method].sum().sort_values(ascending=False).index
+                    mid_loc_demand_index = sorted_locations_dict['sorted_index'][HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS].groupby(['Location'])[sort_method].sum().sort_values(ascending=False).index
+                    low_loc_demand_index = sorted_locations_dict['sorted_index'][HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:].groupby(['Location'])[sort_method].sum().sort_values(ascending=False).index
+                    loc_demand_index = sorted_locations_dict['sorted_index'].groupby(['Location'])[sort_method].sum().sort_values(ascending=False).index
+    
+                    
+                    high_demand_mean_df = high_demand_mean_df.reindex(high_loc_demand_index)
+                    mid_demand_mean_df = mid_demand_mean_df.reindex(mid_loc_demand_index)
+                    low_demand_mean_df = low_demand_mean_df.reindex(low_loc_demand_index)
+                    all_mean_df = all_mean_df.reindex(loc_demand_index)
+
+    
+                elif per == 'Hour_interval':
+                    high_hour_demand_index = sorted_locations_dict['sorted_index'][:HIGH_DEMAND_NUMS].groupby(['Hour_interval'])[sort_method].sum().sort_values(ascending=False).index
+                    mid_hour_demand_index = sorted_locations_dict['sorted_index'][HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS].groupby(['Hour_interval'])[sort_method].sum().sort_values(ascending=False).index
+                    low_hour_demand_index = sorted_locations_dict['sorted_index'][HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:].groupby(['Hour_interval'])[sort_method].sum().sort_values(ascending=False).index
+                    hour_demand_index = sorted_locations_dict['sorted_index'].groupby(['Hour_interval'])[sort_method].sum().sort_values(ascending=False).index
+                    
+                    high_demand_mean_df = high_demand_mean_df.reindex(high_hour_demand_index)
+                    mid_demand_mean_df = mid_demand_mean_df.reindex(mid_hour_demand_index)
+                    low_demand_mean_df = low_demand_mean_df.reindex(low_hour_demand_index)
+                    all_mean_df = all_mean_df.reindex(hour_demand_index)
+    
                 
                 predictions_mean_dict[model][per]['high_demand_loc'] = high_demand_mean_df.reset_index()
                 predictions_mean_dict[model][per]['mid_demand_loc'] = mid_demand_mean_df.reset_index()
                 predictions_mean_dict[model][per]['low_demand_loc'] = low_demand_mean_df.reset_index()
                 predictions_mean_dict[model][per]['all_loc'] = all_mean_df.reset_index()
                 
-    
+
 ```
 
 ```{python}
@@ -522,18 +539,18 @@ calculate_mean_error(predictions_dict, predictions_mean_error_dict)
 ```
 
 ```{python}
-print(predictions_mean_error_dict['baseline_last_week']['Date']['mid_demand_loc'].shape)
-predictions_mean_error_dict['baseline_last_week']['Date']['mid_demand_loc'].head()
+print(predictions_mean_error_dict['baseline_last_week']['Date']['low_demand_loc'].shape)
+predictions_mean_error_dict['baseline_last_week']['Date']['low_demand_loc'].head()
 ```
 
 ```{python}
-print(predictions_mean_error_dict['model_xgboost']['Location']['high_demand_loc'].shape)
-predictions_mean_error_dict['model_xgboost']['Location']['high_demand_loc'].tail()
+print(predictions_mean_error_dict['model_xgboost']['Location']['mid_demand_loc'].shape)
+predictions_mean_error_dict['model_xgboost']['Location']['mid_demand_loc'].tail()
 ```
 
 ```{python}
-print(predictions_mean_error_dict['model_xgboost_ridge']['Hour_interval']['low_demand_loc'].shape)
-predictions_mean_error_dict['model_xgboost_ridge']['Hour_interval']['low_demand_loc'].tail()
+# print(predictions_mean_error_dict['model_xgboost_ridge']['Hour_interval']['mid_demand_loc'].shape)
+# predictions_mean_error_dict['model_xgboost_ridge']['Hour_interval']['mid_demand_loc'].tail()
 ```
 
 ```{python}
@@ -717,9 +734,10 @@ def create_table_errors(predictions_dict, report_dict):
             report_dict['all_locations']['RMSE'][model] = np.sqrt(error_df['squared_error'].mean())
             report_dict['all_locations']['MAPE'][model] = error_df['percentage_error'].mean()
 
-            error_high_demand_df = error_df.loc[error_df['Location'].isin(sorted_locations_dict[model][:HIGH_DEMAND_NUMS]['Location'])]
-            error_mid_demand_df = error_df.loc[error_df['Location'].isin(sorted_locations_dict[model][HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS]['Location'])]
-            error_low_demand_df = error_df.loc[error_df['Location'].isin(sorted_locations_dict[model][HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:]['Location'])]
+            sorted_index = sorted_locations_dict['sorted_index'][['Location', 'Hour_interval']]
+            error_high_demand_df = error_df.merge(sorted_index[:HIGH_DEMAND_NUMS], on=['Location','Hour_interval'])
+            error_mid_demand_df = error_df.merge(sorted_index[HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS], on=['Location','Hour_interval'])
+            error_low_demand_df = error_df.merge(sorted_index[HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:], on=['Location','Hour_interval'])
 
             report_dict['high_demand_locations']['MAE'][model] = error_high_demand_df['error'].mean()            
             report_dict['high_demand_locations']['RMSE'][model] = np.sqrt(error_high_demand_df['squared_error'].mean())
@@ -759,5 +777,9 @@ df
 ```
 
 ```{python}
-# df.style.format('{:.2f}')
+df.style.format('{:.2f}')
+```
+
+```{python}
+
 ```
