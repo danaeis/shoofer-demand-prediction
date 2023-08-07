@@ -30,15 +30,16 @@ from tabulate import tabulate
 LABELED_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/labels_phase2.parquet"
 PREDICTED_XGB_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_predictions_phase2.parquet"
 PREDICTED_XGB_Ridge_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_ridge_predictions_phase2.parquet"
-# PREDICTED_XGB_ARIMA_PATH = "../data/results/xgb_predictions_tuned.parquet"
-# PREDICTED_REGRESSION_PATH = "../data/results/ridge_predictions.parquet"
-# PREDICTED_ARIMA_PATH = "../data/results/arima_predict.parquet"
+PREDICTED_REGRESSION_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/Ridge_predictions_phase2.parquet"
+SAVE_PLOT_PATH = '/Users/maedeh/Desktop/data/pngs/'
+
+
 TEST_START_DATE = '2023-04-01'
 LAST_WEEK_TEST_START_DATE = '2023-03-25'
 
 HIGH_DEMAND_NUMS = 14
 MID_DEMAND_NUMS = 26
-SAVE_PLOT_PATH = '/Users/maedeh/Desktop/data/pngs/'
+
 warnings.filterwarnings('ignore')
 ```
 
@@ -312,6 +313,12 @@ print(predictions_dict['model_xgboost_ridge'].shape)
 predictions_dict['model_xgboost_ridge'].head()
 ```
 
+```{python}
+predictions_dict['model_regression'] = pd.read_parquet(PREDICTED_REGRESSION_PATH)
+print(predictions_dict['model_regression'].shape)
+predictions_dict['model_regression'].head()
+```
+
 ### BaseLine Models
 
 ```{python}
@@ -365,6 +372,12 @@ print(predictions_dict['model_xgboost_ridge'].shape)
 predictions_dict['model_xgboost_ridge'].head()
 ```
 
+```{python}
+predictions_dict['model_regression'] = join_actual_predict(test_df,predictions_dict['model_regression'])
+print(predictions_dict['model_regression'].shape)
+predictions_dict['model_regression'].head()
+```
+
 ### Sort Locations by Demand
 
 ```{python}
@@ -379,20 +392,26 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
 
 ```{python}
 sort_locations_on_demand(predictions_dict, sorted_locations_dict)
+```
+
+```{python}
 print(sorted_locations_dict['baseline_last_week'].shape)
 sorted_locations_dict['baseline_last_week'].head()
 ```
 
 ```{python}
-sort_locations_on_demand(predictions_dict, sorted_locations_dict)
 print(sorted_locations_dict['model_xgboost'].shape)
 sorted_locations_dict['model_xgboost'].head()
 ```
 
 ```{python}
-sort_locations_on_demand(predictions_dict, sorted_locations_dict)
 print(sorted_locations_dict['model_xgboost_ridge'].shape)
 sorted_locations_dict['model_xgboost_ridge'].head()
+```
+
+```{python}
+print(sorted_locations_dict['model_regression'].shape)
+sorted_locations_dict['model_regression'].head()
 ```
 
 # Mean error Calculation
@@ -435,6 +454,11 @@ predictions_dict['model_xgboost'].head()
 ```{python}
 print(predictions_dict['model_xgboost_ridge'].shape)
 predictions_dict['model_xgboost_ridge'].head()
+```
+
+```{python}
+print(predictions_dict['model_regression'].shape)
+predictions_dict['model_regression'].head()
 ```
 
 ### Aggregate Error Columns
@@ -510,6 +534,11 @@ predictions_mean_error_dict['model_xgboost']['Location']['high_demand_loc'].tail
 ```{python}
 print(predictions_mean_error_dict['model_xgboost_ridge']['Hour_interval']['low_demand_loc'].shape)
 predictions_mean_error_dict['model_xgboost_ridge']['Hour_interval']['low_demand_loc'].tail()
+```
+
+```{python}
+print(predictions_mean_error_dict['model_regression']['Hour_interval']['low_demand_loc'].shape)
+predictions_mean_error_dict['model_regression']['Hour_interval']['low_demand_loc'].tail()
 ```
 
 ### Plot Mape for Models Predicted Demands
