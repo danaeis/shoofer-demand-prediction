@@ -32,6 +32,7 @@ PREDICTED_XGB_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofe
 PREDICTED_XGB_RIDGE_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_ridge_predictions_phase2.parquet"
 PREDICTED_REGRESSION_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/Ridge_predictions_phase2.parquet"
 PREDICTED_SVR_RIDGE_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/SVR_ridge_predictions_phase2.parquet'
+PREDICTED_RF_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/RF_predictions_phase2.parquet'
 
 SAVE_PLOT_PATH = '/Users/maedeh/Desktop/data/pngs/'
 
@@ -55,19 +56,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         }
         
     },
@@ -76,19 +77,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         }
         
     },    
@@ -97,19 +98,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         }
         
     },
@@ -118,19 +119,19 @@ report_dict = {
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         },
         'MAE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         },
         'RMSE':{
             'baseline_last_week':None,
             'model_regression':None,
             'model_xgboost':None,
-            # 'model_xgboost_ridge':None
+            'model_rf':None
         }
     },
     
@@ -143,7 +144,7 @@ predictions_dict = {
     'baseline_last_week':None,
     'model_regression':None,
     'model_xgboost':None,
-    'model_xgboost_ridge':None
+    'model_rf':None
 }
 ```
 
@@ -249,7 +250,7 @@ predictions_mean_error_dict={
                 'all_loc':None
                 }
     },
-    'model_xgboost_ridge':
+    'model_rf':
     {
         'Location':
                 {
@@ -310,9 +311,9 @@ predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
-# predictions_dict['model_xgboost_ridge'] = pd.read_parquet(PREDICTED_SVR_RIDGE_PATH)
-# print(predictions_dict['model_xgboost_ridge'].shape)
-# predictions_dict['model_xgboost_ridge'].tail()
+predictions_dict['model_rf'] = pd.read_parquet(PREDICTED_SVR_RIDGE_PATH)
+print(predictions_dict['model_rf'].shape)
+predictions_dict['model_rf'].tail()
 ```
 
 ```{python}
@@ -374,8 +375,8 @@ predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
-# print(predictions_dict['model_xgboost_ridge'].shape)
-# predictions_dict['model_xgboost_ridge'].head()
+print(predictions_dict['model_rf'].shape)
+predictions_dict['model_rf'].head()
 ```
 
 ```{python}
@@ -441,8 +442,8 @@ predictions_dict['model_xgboost'].head()
 ```
 
 ```{python}
-# print(predictions_dict['model_xgboost_ridge'].shape)
-# predictions_dict['model_xgboost_ridge'].head()
+print(predictions_dict['model_rf'].shape)
+predictions_dict['model_rf'].head()
 ```
 
 ```{python}
@@ -549,8 +550,8 @@ predictions_mean_error_dict['model_xgboost']['Location']['mid_demand_loc'].tail(
 ```
 
 ```{python}
-# print(predictions_mean_error_dict['model_xgboost_ridge']['Hour_interval']['mid_demand_loc'].shape)
-# predictions_mean_error_dict['model_xgboost_ridge']['Hour_interval']['mid_demand_loc'].tail()
+print(predictions_mean_error_dict['model_rf']['Hour_interval']['mid_demand_loc'].shape)
+predictions_mean_error_dict['model_rf']['Hour_interval']['mid_demand_loc'].tail()
 ```
 
 ```{python}
