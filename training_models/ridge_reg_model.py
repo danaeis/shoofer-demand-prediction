@@ -3,9 +3,9 @@ import pandas as pd
 from sklearn.model_selection import GridSearchCV
 import xgboost as xgb
 
-class Train_xgb_model():
-    def __init__(self, train, predict, predict_path):
-        self.PREDICT_PATH = predict_path
+class Train_ridge_regression_model():
+    def __init__(self, train, predict):
+        self.PREDICT_PATH = '/home/saadi/DS/shoofer_demand_deploy/data/predictions/ridge_predicted.parquet'
         self.train_dataset = train
         self.predict_dataset = predict
         self.AUTO_TUNE = False

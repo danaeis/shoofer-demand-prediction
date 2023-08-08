@@ -3,10 +3,10 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta  
 
 class Label_Data():
-    def __init__(self, end_date, period):
+    def __init__(self, dateset_path, end_date, period):
         self.END_DATE = datetime.date.fromisoformat(str(end_date))
         self.START_DATE = datetime.date.fromisoformat(str(self.END_DATE - relativedelta(months=period)))
-        self.INPUT_PATH = '/home/saadi/DS/shoofer_demand_deploy/data/datasets/'
+        self.INPUT_PATH = dateset_path
         
     def load_data(self):
 
