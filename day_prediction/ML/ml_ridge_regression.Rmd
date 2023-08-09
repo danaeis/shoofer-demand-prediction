@@ -170,7 +170,7 @@ def feature_engineering(dataset):
 ```
 
 ```{python}
-features_df = feature_engineering(labeled_df, ridge_df)
+features_df = feature_engineering(labeled_df)
 features_df.dropna(inplace = True)
 ```
 
