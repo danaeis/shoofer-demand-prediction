@@ -3,9 +3,13 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Union
+import warnings
 
 from training_models.demand_prediction_train import Demand_Prediction_Train_Model
 from training_models.get_demand import Get_Demand
+
+warnings.filterwarnings('ignore')
+
 
 class prediction_date(BaseModel):
     date: str
