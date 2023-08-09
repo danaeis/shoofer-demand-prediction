@@ -1,8 +1,9 @@
 import pandas as pd
 from prepairing_data.labels import Label_Data
 from training_models.xgb_model import Train_xgb_model
+from training_models.ridge_reg_model import Train_ridge_regression_model
 
-class Demand_Prediction_Model():
+class Demand_Prediction_Train_Model():
     def __init__(self, dataset_path, prediction_date, prediction_path):
         self.period = 3
         self.prediction_date = prediction_date
@@ -12,8 +13,12 @@ class Demand_Prediction_Model():
         self.model_dataset = labeling_data.add_features()
 
     def predict_model(self):
-        self.train_dataset = self.model_dataset[~self.model_dataset['Demand'].isna()]
+        self.train_dataset = self.model_dataset[~self.model_dataset['Demand'].isna()].dropna()
         self.predict_dataset = self.model_dataset[self.model_dataset['Demand'].isna()]
         training_model = Train_xgb_model(self.train_dataset, self.predict_dataset, self.predict_path)
+        # training_model = Train_ridge_regression_model(self.train_dataset, self.predict_dataset, self.predict_path)
         training_model.model_predict()
+        
+
+
  
