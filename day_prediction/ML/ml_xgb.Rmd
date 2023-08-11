@@ -20,7 +20,6 @@ import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-# import shap
 import xgboost as xgb
 import geopandas as gpd
 
@@ -29,6 +28,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolu
 from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import LabelEncoder
 from sklearn.cluster import AgglomerativeClustering
+from itertools import product
 ```
 
 <!-- #region id="pSSMa3G2wGmF" -->
@@ -36,11 +36,11 @@ from sklearn.cluster import AgglomerativeClustering
 <!-- #endregion -->
 
 ```{python id="zIkDLK9zwGmG"}
-INPUT_PATH = '../../../ride_data/'
-OUTPUT_PATH = '../../../results/xgb_predictions.parquet'
+INPUT_PATH = 'datasets/'
+OUTPUT_PATH = 'results/xgb_predictions.parquet'
 
-RIDGE_TEST_PATH = '../../../ridge/ridge_test_predictions.parquet'
-RIDGE_TRAIN_PATH = '../../../ridge/ridge_train_predictions.parquet'
+RIDGE_TEST_PATH = 'results/ridge_test_predictions.parquet'
+RIDGE_TRAIN_PATH = 'results/ridge_train_predictions.parquet'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
@@ -76,8 +76,10 @@ FEATURE_LIST = [
                 ]
 
 TEST_START_DATE = '2023-04-01'
+VALIDATION_START_DATE = '2023-03-21'
+
 GROUP_NUM = 3
-AUTO_TUNE = False
+AUTO_TUNE = True
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -344,9 +346,18 @@ def train_test_splitting(dataset, TEST_START_DATE):
 train_df, test_df = train_test_splitting(features_df, TEST_START_DATE)
 ```
 
+```{python}
+grid_search_train_df, valid_df = train_test_splitting(train_df, VALIDATION_START_DATE) 
+```
+
 ```{python id="xxGdRZfqwGmL"}
 print(f'train dataframe shape : {train_df.shape}')
 train_df.head()
+```
+
+```{python}
+print(f'validation dataframe shape : {valid_df.shape}')
+valid_df.head()
 ```
 
 ```{python id="uPbINwH224Hy"}
@@ -367,35 +378,40 @@ test_df.head()
 <!-- #endregion -->
 
 ```{python id="sOMPo5ryBm8g"}
-def grid_search(model, test_parameters, train_data, feature_list, cv = None):
-    gs = GridSearchCV(
-        estimator = model, 
-        param_grid = test_parameters, 
-        scoring = 'neg_root_mean_squared_error', 
-        cv = cv, 
-        n_jobs = -1
-        )
+def grid_search(model_class, param_grid, train_df, val_df, feature_list):
+    best_params = None
+    best_val_loss = float('inf')
+
+    for params in product(*param_grid.values()):
+        current_params = dict(zip(param_grid.keys(), params))
+        current_model = model_class(**current_params)
+        current_model.fit(train_df[feature_list], train_df['Demand'])
+        
+        y_val_pred = current_model.predict(val_df[feature_list])
+        val_loss = mean_squared_error(val_df['Demand'], y_val_pred)
+        
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_params = current_params
     
-    gs.fit(train_data[feature_list], train_data['Demand'])
-    return gs.best_params_, gs.best_score_
+    return best_params, best_val_loss
 ```
 
 ```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
 if AUTO_TUNE:
-    params_test = {'learning_rate':[0.15, 0.1, 0.05], 
-                'subsample':[0.7, 0.8, 0.9], 
+    params_test = {'learning_rate':[0.1], 
+                'subsample':[0.5, 0.6, 0.7, 0.8], 
                 'colsample_bytree':[0.7, 0.8, 0.9], 
-                'max_depth':[4, 5, 6], 
-                'min_child_weight':[10, 20, 30, 40],
+                'max_depth':[4, 5, 6, 7, 8], 
+                'min_child_weight':[5, 10, 20],
                 }
-    params = {"objective": "reg:squarederror"}
 
     best_params, best_score = grid_search(
-        model = xgb.XGBRegressor(**params), 
-        test_parameters = params_test,
-        train_data = train_df, 
+        model_class = xgb.XGBRegressor, 
+        param_grid = params_test,
+        train_df = grid_search_train_df, 
+        val_df = valid_df,
         feature_list = FEATURE_LIST, 
-        cv = 3
         )
     
     print(best_params, best_score)
@@ -416,7 +432,9 @@ else:
 ```{python id="pbhM5Oe6PjW7"}
 def model_predict(model, train_data, test_data, feature_list):
 
-    model.fit(train_data[feature_list], train_data['Demand'])
+    #model.fit(train_data[feature_list], train_data['Demand'])
+    model.fit(train_data[feature_list], train_data['Demand'], eval_set=[(test_data[feature_list], test_data['Demand'])], verbose=True)
+    print(np.min(model.evals_result()["validation_0"]["rmse"]))
     train_predict_df = model.predict(train_data[feature_list])
     test_predict_df = model.predict(test_data[feature_list])
 

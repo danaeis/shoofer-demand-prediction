@@ -25,10 +25,10 @@ from tabulate import tabulate
 # Configs
 
 ```{python}
-LABELED_PATH = '../../../data/labels.parquet'
-PREDICTED_XGB_PATH = '../../../results/xgb_predictions.parquet'
-PREDICTED_RF_PATH = '../../../results/rf_predictions.parquet'
-PREDICTED_RIDGE_PATH = '../../../ridge/ridge_test_predictions.parquet'
+LABELED_PATH = 'data/labels.parquet'
+PREDICTED_XGB_PATH = 'data/results/xgb_predictions.parquet'
+PREDICTED_RF_PATH = 'data/results/rf_predictions.parquet'
+PREDICTED_RIDGE_PATH = 'data/results/ridge_test_predictions.parquet'
 TEST_START_DATE = '2023-04-01'
 TEST_START_DATE_BASE_LINE = '2023-03-25'
 HIGH_DEMAND_NUMS = 16
