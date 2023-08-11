@@ -19,6 +19,7 @@ import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import networkx as nx
 from sklearn.cluster import KMeans
 ```
 
@@ -93,14 +94,83 @@ labels_df.head()
 ```
 
 ```{python}
-plt.scatter(labels_df.groupby(['PULocation', 'DOLocation'])['Demand'].sum().values, range(68382))
+mean_labeled_df = (labels_df.groupby(['PULocation', 'DOLocation'], as_index=False)['Demand']
+                   .mean().sort_values('Demand', ascending=False)
+                   .reset_index(drop=True))
 ```
 
 ```{python}
-important_pairs = (labels_df.groupby(['PULocation', 'DOLocation'], as_index=False)['Demand']
-                   .sum().sort_values('Demand', ascending=False)
-                   .reset_index(drop=True)[:5][['PULocation', 'DOLocation']])
+def plot_cumsum_demand(labeled_df, target_demand):
+    grouped_df = (labeled_df.groupby(['PULocation', 'DOLocation'], as_index=False)['Demand']
+                  .sum().reset_index().sort_values(by='Demand', ascending=False).reset_index(drop=True))
+    cumulative_demand = (grouped_df['Demand'].cumsum() / grouped_df['Demand'].sum()).to_numpy()
+    
+    plt.plot(range(0,len(cumulative_demand)), cumulative_demand)
+    plt.xlabel('Location numbers')
+    plt.ylabel('Cumulative Demand')
+    plt.title('Cumulative Demand by Location')
+    target_x = (cumulative_demand <= target_demand).argmin()
+    plt.axhline(y=target_demand, color='r', linestyle='--', label=f'Target Demand ({target_demand})')
+    plt.axvline(x=target_x, color='g', linestyle='--', label=f'Target Location ({target_x})')
+    important_pairs = grouped_df.iloc[:target_x][['PULocation', 'DOLocation']]
+    
+    plt.legend() 
+    plt.show()
+    return target_x, important_pairs
+```
+
+```{python}
+last_pair_index, important_pairs = plot_cumsum_demand(labels_df, 0.90)
+```
+
+```{python}
+unique_locations = important_pairs['PULocation'].unique()
+
+fig, axes = plt.subplots(len(unique_locations), 1, figsize=(8, 6 * len(unique_locations)))
+
+# Iterate over unique locations and create separate plots
+for i, location in enumerate(unique_locations):
+    # Create a directed graph for the specific location
+    G = nx.DiGraph()
+
+    location_df = important_pairs[important_pairs['PULocation'] == location]
+
+    # Add nodes and edges to the graph
+    for _, row in location_df.iterrows():
+        source, target = row['PULocation'], row['DOLocation']
+        G.add_edge(source, target)
+
+    pos = nx.spring_layout(G, k=0.3)
+
+    nx.draw_networkx(G, pos, with_labels=True, node_color='lightblue', node_size=200, font_size=7, alpha=0.8, arrows=True, ax=axes[i])
+
+    axes[i].set_title(f'Pairs Visualization - PULocation: {location}, {len(location_df)} pairs')
+    axes[i].axis('off')
+
+plt.tight_layout()
+
+plt.show()
+```
+
+```{python}
+pair_labels = np.concatenate((np.ones(last_pair_index), np.zeros(len(mean_labeled_df) - last_pair_index)))
+plt.scatter(range(len(mean_labeled_df['Demand'].values)), mean_labeled_df['Demand'].values, c = pair_labels)
+plt.xlabel('Location pair number')
+plt.ylabel('Mean of pair demand')
+plt.show()
+```
+
+```{python}
 merged_df = pd.merge(labels_df, important_pairs, on=['PULocation', 'DOLocation'], how='inner')
+```
+
+```{python}
+print(f'labels_df shape : {merged_df.shape}')
+merged_df.head()
+```
+
+```{python}
+merged_df[merged_df['Demand'] == 0]
 ```
 
 # File saving
