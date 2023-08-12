@@ -17,6 +17,7 @@ jupyter:
 <!-- #endregion -->
 
 ```{python id="AnwSHO1L97I5"}
+from itertools import product
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
@@ -46,7 +47,10 @@ RF_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-pr
 FEATURE_LIST = ['zone',
                 'day_of_week',
                 'day_of_month',
-    
+
+                'group_max',
+                'group_min',
+                
                 'max_previous_week_interval',
                 'max_previous_2week_interval',
     
@@ -79,12 +83,14 @@ FEATURE_LIST = ['zone',
 
 
 TEST_START_DATE = '2023-04-1'
+VALIDATION_START_DATE = '2023-03-18'
+
 NUM_INTERVAL_PER_DAY = 8
 HIGH_DEMAND_NUMS = 55
 MID_DEMAND_NUMS = 157
 sort_method = 'mean'
 
-AUTO_TUNE = False
+AUTO_TUNE = True
 add_ridge_feature = True
 ```
 
@@ -97,14 +103,8 @@ add_ridge_feature = True
 ## Load Data
 <!-- #endregion -->
 
-```{python}
-def load_data(INPUT_PATH):
-    features_df = pd.read_parquet(INPUT_PATH, engine='pyarrow')
-    return features_df
-```
-
 ```{python id="87BFHUu1-z73"}
-features_df = load_data(INPUT_PATH)
+features_df = pd.read_parquet(INPUT_PATH, engine='pyarrow')
 ```
 
 ```{python id="hCN-11QT3bp1"}
@@ -113,7 +113,7 @@ features_df.head()
 ```
 
 ```{python}
-ridge_df = pd.read_parquet(Ridge_PATH)
+ridge_df = pd.read_parquet(Ridge_PATH, engine='pyarrow')
 ```
 
 ```{python}
@@ -220,10 +220,10 @@ selected_features_df.head()
 <!-- #endregion -->
 
 ```{python id="CMY1G1lmwGmI"}
-def train_test_splitting(dataset, TEST_START_DATE):
-    
-    train_df = dataset[dataset['Date'] < TEST_START_DATE]
-    test_df = dataset[dataset['Date'] >= TEST_START_DATE]
+def train_test_splitting(dataset, START_DATE):
+
+    train_df = dataset[dataset['Date'] < START_DATE]
+    test_df = dataset[dataset['Date'] >= START_DATE]
 
     return train_df, test_df
 ```
@@ -242,6 +242,20 @@ print(f'test dataframe shape : {test_df.shape}')
 test_df.head()
 ```
 
+```{python}
+gridsearch_train_df, validation_df = train_test_splitting(train_df, VALIDATION_START_DATE)
+```
+
+```{python}
+print(f'gridsearch_train dataframe shape : {gridsearch_train_df.shape}')
+gridsearch_train_df.head()
+```
+
+```{python}
+print(f'validation dataframe shape : {validation_df.shape}')
+validation_df.head()
+```
+
 <!-- #region id="xf8ChW_7wGmL" -->
 # Model Training
 <!-- #endregion -->
@@ -255,37 +269,43 @@ test_df.head()
 <!-- #endregion -->
 
 ```{python id="sOMPo5ryBm8g"}
-def grid_search(model, test_parameters, train_data, feature_list, cv = None):
-    gs = GridSearchCV(
-        estimator = model, 
-        param_grid = test_parameters, 
-        scoring = 'neg_root_mean_squared_error', 
-        cv = cv, 
-        n_jobs = -1
-        )
+def grid_search(test_parameters, train_data, validation_data, feature_list):
+    best_score = float('inf')
+    best_params = None
+    param_combination = product(*test_parameters.values())
     
-    gs.fit(train_data[feature_list], train_data['Demand'])
-    return gs.best_params_, gs.best_score_
+    for param in param_combination:
+
+        param_dict = dict(zip(test_parameters.keys(), param))
+        model = RandomForestRegressor(**param_dict)
+        model.fit(train_data[feature_list], train_data['Demand'])
+        
+        validation_predict_df = model.predict(validation_data[feature_list])
+        score = mean_squared_error(validation_data['Demand'], validation_predict_df)
+        
+        if score<best_score:
+            best_score = score
+            best_params = param_dict
+            
+    return best_params, best_score
 ```
 
 ```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
 if AUTO_TUNE:
     params_test = {
                     'oob_score': [True],
-                    'max_features': [0.7, 0.8, 1], 
-                    'max_depth': [6, 7, 8, 9], 
-                    'max_samples': [0.8, 0.9, 1], 
-                    'min_samples_leaf': [8, 10, 15, 25, 50],
-                    'n_estimators': [800, 1000, 1200, 1500]
+                    'max_features': [0.7, 0.8], 
+                    'max_depth': [10, 12], 
+                    'max_samples': [0.8, 0.9], 
+                    'min_samples_leaf': [8, 10, 15],
+                    'n_estimators': [1000, 1200]
                 }
-    params = {}
 
     best_params, best_score = grid_search(
-        model = RandomForestRegressor(**params), 
         test_parameters = params_test,
-        train_data = train_df, 
-        feature_list = FEATURE_LIST, 
-        cv = 3
+        train_data = gridsearch_train_df,
+        validation_data = validation_df,
+        feature_list = FEATURE_LIST
         )
     
     print(best_params, best_score)
