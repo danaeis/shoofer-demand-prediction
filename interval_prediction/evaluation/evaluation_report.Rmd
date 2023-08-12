@@ -50,7 +50,9 @@ LAST_WEEK_TEST_START_DATE = '2023-03-25'
 NUM_INTERVAL_PER_DAY = 8
 HIGH_DEMAND_NUMS = 55
 MID_DEMAND_NUMS = 157
-sort_method = 'mean'
+NUM_LOC = 263
+SORT_METHODE = 'mean'
+
 
 
 warnings.filterwarnings('ignore')
@@ -61,6 +63,12 @@ report_dict = {cat:{met:{model:None for model in MODEL_LIST} for met in METRICS}
 predictions_dict = {model:None for model in MODEL_LIST}
 sorted_locations_dict={cat:None for cat in CATEGORIES}
 predictions_mean_error_dict={model:{based:{cat:None for cat in CATEGORIES} for based in BASED_ON} for model in MODEL_LIST}
+```
+
+```{python}
+num_category=len(CATEGORIES)
+num=[0, HIGH_DEMAND_NUMS, HIGH_DEMAND_NUMS+MID_DEMAND_NUMS, NUM_LOC]
+category_arange = {str(n) : np.arange(num[n],num[n+1]) if n!=num_category-1 else np.arange(num[0],num[-1]) for n in range(num_category)}
 ```
 
 # Load Data
@@ -135,12 +143,10 @@ for model in MODEL_LIST:
 def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
     predictions_df = predictions_dict['BASELINE_LAST_WEEK']
     if (predictions_df is not None):
-        sorted_index = predictions_df.groupby(['Location','Hour_interval'])['Demand'].aggregate([sort_method]).sort_values(sort_method, ascending=False)
+        sorted_index = predictions_df.groupby(['Location','Hour_interval'])['Demand'].aggregate([SORT_METHODE]).sort_values(SORT_METHODE, ascending=False)
         sorted_index = sorted_index.reset_index()
-        sorted_locations_dict['high_demand_locations'] = sorted_index[:HIGH_DEMAND_NUMS]
-        sorted_locations_dict['mid_demand_locations'] = sorted_index[HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS]
-        sorted_locations_dict['low_demand_locations'] = sorted_index[HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:]
-        sorted_locations_dict['all_locations'] = sorted_index
+        for n, cat in enumerate(sorted_locations_dict.keys()):
+            sorted_locations_dict[cat] = sorted_index.loc[category_arange[str(n)]]
 ```
 
 ```{python}
@@ -159,12 +165,15 @@ for cat in CATEGORIES:
 def calculate_error(actual_predicted_dict: dict):
     for label,actual_predicted_df in actual_predicted_dict.items():
         if (actual_predicted_df is not None):
+            
             actual_predicted_df['error'] = np.abs(
                 actual_predicted_df['Demand']-actual_predicted_df['Predicted_demand']
                 )
+            
             actual_predicted_df['squared_error'] = np.square(
                 actual_predicted_df['Demand']-actual_predicted_df['Predicted_demand']
                 )
+            
             actual_Demand_df = np.where(actual_predicted_df['Demand']==0, 1, actual_predicted_df['Demand'])
             # actual_Demand_df = actual_predicted_df['Demand']+1
             actual_predicted_df['percentage_error'] = (
@@ -201,10 +210,10 @@ def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dic
                     categorized_mean_df.drop(columns='mse', inplace=True)
                     categorized_mean_df['mape'] = np.where(categorized_mean_df['mape']>100, 100, categorized_mean_df['mape'])
                     if per == 'Location':
-                        loc_demand_index = sorted_locations.groupby(['Location'])[sort_method].sum().sort_values(ascending=False).index
+                        loc_demand_index = sorted_locations.groupby(['Location'])[SORT_METHODE].sum().sort_values(ascending=False).index
                         categorized_mean_df = categorized_mean_df.reindex(loc_demand_index)
                     if per == 'Hour_interval':
-                        hour_demand_index = sorted_locations.groupby(['Hour_interval'])[sort_method].sum().sort_values(ascending=False).index
+                        hour_demand_index = sorted_locations.groupby(['Hour_interval'])[SORT_METHODE].sum().sort_values(ascending=False).index
                         categorized_mean_df = categorized_mean_df.reindex(hour_demand_index)
             
                     predictions_mean_dict[model][per][cat] = categorized_mean_df.reset_index()
@@ -306,12 +315,16 @@ report_df = report_df.T
 
 ```{python}
 df = pd.DataFrame(report_df,
-                  index=pd.Index(report_df.index),
-                  columns=pd.MultiIndex.from_product([['high_demand_locations', 'mid_demand_locations', 'low_demand_locations', 'all_locations'],
-                                                      ['MAPE','MAE','RMSE']], names=['location CATEGORIES:', 'Error Metrics:']))
+                  index=pd.Index(MODEL_LIST),
+                  columns=pd.MultiIndex.from_product([CATEGORIES,
+                                                      METRICS], names=['location CATEGORIES:', 'Error Metrics:']))
 
 ```
 
 ```{python}
 df.style.format('{:.2f}')
+```
+
+```{python}
+
 ```
