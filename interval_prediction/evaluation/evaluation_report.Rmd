@@ -132,10 +132,6 @@ for model in MODEL_LIST:
 ### Sort Locations by Demand
 
 ```{python}
-predictions_dict['BASELINE_LAST_WEEK']
-```
-
-```{python}
 def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
     predictions_df = predictions_dict['BASELINE_LAST_WEEK']
     if (predictions_df is not None):
@@ -145,7 +141,6 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
         sorted_locations_dict['mid_demand_locations'] = sorted_index[HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS]
         sorted_locations_dict['low_demand_locations'] = sorted_index[HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:]
         sorted_locations_dict['all_locations'] = sorted_index
-            
 ```
 
 ```{python}
