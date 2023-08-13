@@ -62,12 +62,6 @@ sorted_locations_dict={cat:None for cat in CATEGORIES}
 predictions_mean_error_dict={model:{based:{cat:None for cat in CATEGORIES} for based in BASED_ON} for model in MODEL_LIST}
 ```
 
-```{python}
-num_category=len(CATEGORIES)
-num=[0, HIGH_DEMAND_NUMS, HIGH_DEMAND_NUMS+MID_DEMAND_NUMS, NUM_LOC]
-category_arange = {str(n) : np.arange(num[n],num[n+1]) if n!=num_category-1 else np.arange(num[0],num[-1]) for n in range(num_category)}
-```
-
 # Load Data
 
 
@@ -141,8 +135,10 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
     if (predictions_df is not None):
         sorted_index = predictions_df.groupby(['Location'])['Demand'].aggregate([SORT_METHODE]).sort_values(SORT_METHODE, ascending=False)
         sorted_index = sorted_index.reset_index()
-        for n, cat in enumerate(sorted_locations_dict.keys()):
-            sorted_locations_dict[cat] = sorted_index.loc[category_arange[str(n)]]
+        sorted_locations_dict['high_demand_locations'] = sorted_index[:HIGH_DEMAND_NUMS]
+        sorted_locations_dict['mid_demand_locations'] = sorted_index[HIGH_DEMAND_NUMS:MID_DEMAND_NUMS+HIGH_DEMAND_NUMS]
+        sorted_locations_dict['low_demand_locations'] = sorted_index[MID_DEMAND_NUMS+HIGH_DEMAND_NUMS:]
+        sorted_locations_dict['all_locations'] = sorted_index
 ```
 
 ```{python}
@@ -219,11 +215,11 @@ def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dic
 
 ```{python}
 calculate_mean_error(predictions_dict, predictions_mean_error_dict)
-for model in MODEL_LIST:
-    for per in BASED_ON:
-        for cat in CATEGORIES:
-            print(f"shape of predictions_mean_dict[{model}][{per}][{cat}]: {predictions_mean_error_dict[model][per][cat].shape}")
-            display(predictions_mean_error_dict[model][per][cat].head())
+# for model in MODEL_LIST:
+#     for per in BASED_ON:
+#         for cat in CATEGORIES:
+#             print(f"shape of predictions_mean_dict[{model}][{per}][{cat}]: {predictions_mean_error_dict[model][per][cat].shape}")
+#             display(predictions_mean_error_dict[model][per][cat].head())
 ```
 
 ### Plot Mape for Models Predicted Demands
@@ -233,31 +229,14 @@ def plot(predictions_mean_dict, per):
     
     fig, axes = plt.subplots(nrows=12, ncols=1, figsize=(15,25))
     for i, met in enumerate(METRICS):
-        for model,mean_df in predictions_mean_dict.items():
-            high_demand_df = mean_df[per]['high_demand_locations']
-            mid_demand_df = mean_df[per]['mid_demand_locations']
-            low_demand_df = mean_df[per]['low_demand_locations']
-            all_df = mean_df[per]['all_locations']
-            
-            if ((low_demand_df is not None) and 
-                (mid_demand_df is not None)and 
-                (high_demand_df is not None)and 
-                (all_df is not None)):
-                
-                high_demand_df[per] = high_demand_df[per].astype(str)
-                mid_demand_df[per] = mid_demand_df[per].astype(str)
-                low_demand_df[per] = low_demand_df[per].astype(str)
-                all_df[per] = all_df[per].astype(str)
+        for j, cat in enumerate(CATEGORIES):
+            for model,mean_df in predictions_mean_dict.items():
+                categorized_demand_df = mean_df[per][cat]
+                if (categorized_demand_df is not None):
+                    categorized_demand_df[per] = categorized_demand_df[per].astype(str)
+                    categorized_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[len(CATEGORIES)*i+j],label=model)            
     
-                high_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[4*i],label=model)            
-                mid_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[4*i+1],label=model)
-                low_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[4*i+2],label=model)
-                all_df.plot(x=per,y=met.lower(),kind='line',ax = axes[4*i+3],label=model)
-    
-        axes[4*i].set_title('Models '+met+' for '+str(HIGH_DEMAND_NUMS)+' high demand locations', bbox=dict( alpha=0.5)) 
-        axes[4*i+1].set_title('Models '+met+' for '+str(MID_DEMAND_NUMS)+' lower demand locations', bbox=dict( alpha=0.5)) 
-        axes[4*i+2].set_title('Models '+met+' for other low demand locations', bbox=dict( alpha=0.5)) 
-        axes[4*i+3].set_title('Models '+met+' for all locations', bbox=dict(alpha=0.5))
+            axes[len(CATEGORIES)*i+j].set_title('Models '+met+' for '+str(HIGH_DEMAND_NUMS)+' '+cat, bbox=dict( alpha=0.5)) 
     plt.tight_layout()
     plt.show()
     # plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
