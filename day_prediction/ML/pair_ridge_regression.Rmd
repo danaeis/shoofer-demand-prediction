@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 
 from sklearn.linear_model import Lasso, Ridge
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -35,7 +34,9 @@ from itertools import product
 
 ```{python id="zIkDLK9zwGmG"}
 INPUT_PATH = 'data/pair_labels.parquet'
-OUTPUT_PATH = 'results/pairs_ridge_predictions.parquet'
+
+OUTPUT_PATH_TEST = 'ridge/pairs_ridge_test_predictions.parquet'
+OUTPUT_PATH_TRAIN = 'ridge/pairs_ridge_train_predictions.parquet'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
@@ -329,14 +330,21 @@ def prediction_labeling(pred_df, labeled_df):
 ```
 
 ```{python}
-labeled_prediction_df = prediction_labeling(test_prediction_df, test_df)
+labeled_test_prediction_df = prediction_labeling(test_prediction_df, test_df)
+labeled_train_prediction_df = prediction_labeling(train_prediction_df, train_df)
 ```
 
 ```{python}
-print(f'labeled prediction dataframe shape : {labeled_prediction_df.shape}')
-labeled_prediction_df.head()
+print(f'labeled prediction dataframe shape : {labeled_train_prediction_df.shape}')
+labeled_train_prediction_df.head()
 ```
 
 ```{python}
-save_predictions(labeled_prediction_df, OUTPUT_PATH)
+print(f'labeled prediction dataframe shape : {labeled_test_prediction_df.shape}')
+labeled_test_prediction_df.head()
+```
+
+```{python}
+save_predictions(labeled_train_prediction_df, OUTPUT_PATH_TRAIN)
+save_predictions(labeled_test_prediction_df, OUTPUT_PATH_TEST)
 ```
