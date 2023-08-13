@@ -21,11 +21,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from sklearn.linear_model import Lasso, Ridge
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 from itertools import product
 ```
 
@@ -37,10 +33,15 @@ from itertools import product
 INPUT_PATH = 'data/pair_labels.parquet'
 OUTPUT_PATH = 'results/pairs_xgb_predictions.parquet'
 
+RIDGE_TEST_PATH = 'ridge/pairs_ridge_test_predictions.parquet'
+RIDGE_TRAIN_PATH = 'ridge/pairs_ridge_train_predictions.parquet'
+
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
 FEATURE_LIST = [
+                'Ridge_predict',
+                
                 'Previous_week_max_demand',
                 'Previous_2week_max_demand',
 
@@ -88,6 +89,17 @@ print(f'labeled dataframe shape : {labeled_df.shape}')
 labeled_df.head()
 ```
 
+```{python}
+ridge_train_df = pd.read_parquet(RIDGE_TRAIN_PATH)
+ridge_test_df = pd.read_parquet(RIDGE_TEST_PATH)
+ridge_df = pd.concat([ridge_train_df, ridge_test_df], axis = 0)
+```
+
+```{python}
+print(f'ridge dataframe shape : {ridge_df.shape}')
+ridge_df.head()
+```
+
 ## Add Feature
 
 ```{python}
@@ -112,6 +124,12 @@ def feature_engineering(dataset):
 
     dataset['Day_of_week'] = dataset['Date'].dt.dayofweek + 1
     dataset['Day_of_month'] = dataset['Date'].dt.day
+    
+    dataset = (
+        dataset
+        .merge(ridge_df, how='left', on=['PULocation', 'Date', 'DOLocation'])
+        .rename(columns = {'Predicted_demand' : 'Ridge_predict'})
+        )
     
     return dataset
 
@@ -237,8 +255,6 @@ else:
 def model_predict(model, train_data, test_data, feature_list):
 
     model.fit(train_data[feature_list], train_data['Demand'])
-    # model.fit(train_data[feature_list], train_data['Demand'], eval_set=[(test_data[feature_list], test_data['Demand'])], verbose=True)
-    # print(np.min(model.evals_result()["validation_0"]["rmse"]))
     train_predict_df = model.predict(train_data[feature_list])
     test_predict_df = model.predict(test_data[feature_list])
 
@@ -310,7 +326,6 @@ def evaluation(model_name, train_df, test_df, train_prediction_df, test_predicti
     evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
     evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
-
 ```
 
 ```{python id="qSZwIFprTkqK", outputId="7ae94952-ec22-410a-9d26-6e05a96af6ab"}
