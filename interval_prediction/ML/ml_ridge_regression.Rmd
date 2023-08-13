@@ -79,9 +79,7 @@ TEST_START_DATE = '2023-04-1'
 VALIDATION_START_DATE = '2023-03-18'
 
 NUM_INTERVAL_PER_DAY = 8
-HIGH_DEMAND_NUMS = 55
-MID_DEMAND_NUMS = 157
-sort_method = 'mean'
+
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -348,17 +346,6 @@ def prediction_labeling(pred_df, labeled_df):
     labeled_prediction_df = labeled_df[['Location', 'Date','Hour_interval']]
     labeled_prediction_df['Predicted_demand'] = pred_df
     return labeled_prediction_df
-```
-
-```{python}
-# def prediction_labeling(train_prediction_df, test_prediction_df, labeled_df):
-#     train_prediction_df = pd.DataFrame(train_prediction_df, columns = ['Predicted_demand'])
-#     test_prediction_df = pd.DataFrame(test_prediction_df, columns = ['Predicted_demand'])
-#     pred_df = pd.concat([train_prediction_df,test_prediction_df],axis=0).reset_index(drop=True)
-#     labeled_df.reset_index(inplace = True)
-#     labeled_prediction_df = labeled_df[['Location', 'Date','Hour_interval']]
-#     labeled_prediction_df['Predicted_demand'] = pred_df
-#     return labeled_prediction_df
 ```
 
 ```{python}

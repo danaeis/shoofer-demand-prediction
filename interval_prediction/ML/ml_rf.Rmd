@@ -47,9 +47,6 @@ RF_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-pr
 FEATURE_LIST = ['zone',
                 'day_of_week',
                 'day_of_month',
-
-                'group_max',
-                'group_min',
                 
                 'max_previous_week_interval',
                 'max_previous_2week_interval',
@@ -86,11 +83,8 @@ TEST_START_DATE = '2023-04-1'
 VALIDATION_START_DATE = '2023-03-18'
 
 NUM_INTERVAL_PER_DAY = 8
-HIGH_DEMAND_NUMS = 55
-MID_DEMAND_NUMS = 157
-sort_method = 'mean'
 
-AUTO_TUNE = True
+AUTO_TUNE = False
 add_ridge_feature = True
 ```
 
@@ -158,20 +152,6 @@ def add_feature(dataset, lag_num):
     
     dataset['diff_previous_2day_interval'] = dataset['previous_day_interval']-dataset['previous_2day_interval']
     dataset['diff_previous_2week_interval'] = dataset['previous_week_interval']-dataset['previous_2week_interval']
-
-    
-    sort_index = dataset.groupby(['Location','Hour_interval'])['Demand'].aggregate([sort_method]).sort_values(sort_method, ascending=False).reset_index()
-    sorted_index = sort_index[['Location', 'Hour_interval']]
-    high_demand_df = dataset.merge(sorted_index[:HIGH_DEMAND_NUMS], on=['Location','Hour_interval'])
-    mid_demand_df = dataset.merge(sorted_index[HIGH_DEMAND_NUMS:HIGH_DEMAND_NUMS+MID_DEMAND_NUMS], on=['Location','Hour_interval'])
-    low_demand_df = dataset.merge(sorted_index[HIGH_DEMAND_NUMS+MID_DEMAND_NUMS:], on=['Location','Hour_interval'])
-    high_demand_df['group_max'] = high_demand_df['Demand'].max()
-    high_demand_df['group_min'] = high_demand_df['Demand'].min()
-    mid_demand_df['group_max'] = mid_demand_df['Demand'].max()
-    mid_demand_df['group_min'] = mid_demand_df['Demand'].min()
-    low_demand_df['group_max'] = low_demand_df['Demand'].max()
-    low_demand_df['group_min'] = low_demand_df['Demand'].min()
-    dataset = pd.concat([high_demand_df, mid_demand_df, low_demand_df]).sort_values(['Location','Date','Hour_interval'])
     
     return dataset
 
@@ -313,10 +293,10 @@ else:
     best_params = {
                     'oob_score': True,
                     'max_features': 0.7, 
-                    'max_depth': 14, 
-                    'max_samples': 0.8, 
-                    'min_samples_leaf': 10,
-                    'n_estimators': 1200
+                    'max_depth': 12, 
+                    'max_samples': 0.9, 
+                    'min_samples_leaf': 8,
+                    'n_estimators': 1000
                    }
 
 ```

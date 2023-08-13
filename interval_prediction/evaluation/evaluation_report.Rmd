@@ -30,14 +30,14 @@ BASE_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-
 
 LABELED_PATH = BASE_PATH + "labels_phase2.parquet"
 XGB_MODEL_PATH = BASE_PATH + "XGB_predictions_phase2.parquet"
-REGRESSION_MODEL_PATH = BASE_PATH + "Ridge_predictions_phase2.parquet"
-RF_MODEL_PATH = BASE_PATH + "RF_predictions_phase2.parquet"
+RIDGE_MODEL_PATH = BASE_PATH + "Ridge_predictions_phase2.parquet"
+RF_RIDGE_MODEL_PATH = BASE_PATH + "RF_ridge_predictions_phase2.parquet"
 
 SAVE_PLOT_PATH = BASE_PATH + 'pngs/'
 
 
 
-MODEL_LIST = ['BASELINE_LAST_WEEK', 'REGRESSION_MODEL', 'XGB_MODEL', 'RF_MODEL']
+MODEL_LIST = ['BASELINE_LAST_WEEK', 'RIDGE_MODEL', 'XGB_MODEL', 'RF_RIDGE_MODEL']
 CATEGORIES = ['high_demand_locations', 'mid_demand_locations', 'low_demand_locations', 'all_locations']
 METRICS = ['MAPE', 'MAE', 'RMSE']
 BASED_ON = ['Location', 'Date', 'Hour_interval', 'Day_of_week']
@@ -50,7 +50,7 @@ LAST_WEEK_TEST_START_DATE = '2023-03-25'
 NUM_INTERVAL_PER_DAY = 8
 HIGH_DEMAND_NUMS = 55
 MID_DEMAND_NUMS = 157
-NUM_LOC = 263
+NUM_LOC = 262
 SORT_METHODE = 'mean'
 
 
@@ -67,7 +67,7 @@ predictions_mean_error_dict={model:{based:{cat:None for cat in CATEGORIES} for b
 
 ```{python}
 num_category=len(CATEGORIES)
-num=[0, HIGH_DEMAND_NUMS, HIGH_DEMAND_NUMS+MID_DEMAND_NUMS, NUM_LOC]
+num=[0, HIGH_DEMAND_NUMS, HIGH_DEMAND_NUMS+MID_DEMAND_NUMS, NUM_INTERVAL_PER_DAY*NUM_LOC]
 category_arange = {str(n) : np.arange(num[n],num[n+1]) if n!=num_category-1 else np.arange(num[0],num[-1]) for n in range(num_category)}
 ```
 
@@ -237,31 +237,14 @@ def plot(predictions_mean_dict, per):
     
     fig, axes = plt.subplots(nrows=12, ncols=1, figsize=(15,25))
     for i, met in enumerate(METRICS):
-        for model,mean_df in predictions_mean_dict.items():
-            high_demand_df = mean_df[per]['high_demand_locations']
-            mid_demand_df = mean_df[per]['mid_demand_locations']
-            low_demand_df = mean_df[per]['low_demand_locations']
-            all_df = mean_df[per]['all_locations']
-            
-            if ((low_demand_df is not None) and 
-                (mid_demand_df is not None)and 
-                (high_demand_df is not None)and 
-                (all_df is not None)):
-                
-                high_demand_df[per] = high_demand_df[per].astype(str)
-                mid_demand_df[per] = mid_demand_df[per].astype(str)
-                low_demand_df[per] = low_demand_df[per].astype(str)
-                all_df[per] = all_df[per].astype(str)
+        for j, cat in enumerate(CATEGORIES):
+            for model,mean_df in predictions_mean_dict.items():
+                categorized_demand_df = mean_df[per][cat]
+                if (categorized_demand_df is not None):
+                    categorized_demand_df[per] = categorized_demand_df[per].astype(str)
+                    categorized_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[len(CATEGORIES)*i+j],label=model)            
     
-                high_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[4*i],label=model)            
-                mid_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[4*i+1],label=model)
-                low_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[4*i+2],label=model)
-                all_df.plot(x=per,y=met.lower(),kind='line',ax = axes[4*i+3],label=model)
-    
-        axes[4*i].set_title('Models '+met+' for '+str(HIGH_DEMAND_NUMS)+' high demand locations', bbox=dict( alpha=0.5)) 
-        axes[4*i+1].set_title('Models '+met+' for '+str(MID_DEMAND_NUMS)+' lower demand locations', bbox=dict( alpha=0.5)) 
-        axes[4*i+2].set_title('Models '+met+' for other low demand locations', bbox=dict( alpha=0.5)) 
-        axes[4*i+3].set_title('Models '+met+' for all locations', bbox=dict(alpha=0.5))
+            axes[len(CATEGORIES)*i+j].set_title('Models '+met+' for '+str(HIGH_DEMAND_NUMS)+' '+ cat, bbox=dict( alpha=0.5)) 
     plt.tight_layout()
     plt.show()
     # plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
