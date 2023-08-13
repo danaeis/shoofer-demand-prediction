@@ -65,12 +65,6 @@ sorted_locations_dict={cat:None for cat in CATEGORIES}
 predictions_mean_error_dict={model:{based:{cat:None for cat in CATEGORIES} for based in BASED_ON} for model in MODEL_LIST}
 ```
 
-```{python}
-num_category=len(CATEGORIES)
-num=[0, HIGH_DEMAND_NUMS, HIGH_DEMAND_NUMS+MID_DEMAND_NUMS, NUM_INTERVAL_PER_DAY*NUM_LOC]
-category_arange = {str(n) : np.arange(num[n],num[n+1]) if n!=num_category-1 else np.arange(num[0],num[-1]) for n in range(num_category)}
-```
-
 # Load Data
 
 
@@ -145,8 +139,11 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
     if (predictions_df is not None):
         sorted_index = predictions_df.groupby(['Location','Hour_interval'])['Demand'].aggregate([SORT_METHODE]).sort_values(SORT_METHODE, ascending=False)
         sorted_index = sorted_index.reset_index()
-        for n, cat in enumerate(sorted_locations_dict.keys()):
-            sorted_locations_dict[cat] = sorted_index.loc[category_arange[str(n)]]
+        sorted_locations_dict['high_demand_locations'] = sorted_index[:HIGH_DEMAND_NUMS]
+        sorted_locations_dict['mid_demand_locations'] = sorted_index[HIGH_DEMAND_NUMS:MID_DEMAND_NUMS+HIGH_DEMAND_NUMS]
+        sorted_locations_dict['low_demand_locations'] = sorted_index[MID_DEMAND_NUMS+HIGH_DEMAND_NUMS:]
+        sorted_locations_dict['all_locations'] = sorted_index
+        
 ```
 
 ```{python}
