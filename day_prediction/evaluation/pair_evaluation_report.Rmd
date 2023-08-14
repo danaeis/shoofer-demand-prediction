@@ -273,8 +273,8 @@ def create_table_errors(predictions_dict, report_dict):
     for model, error_df in predictions_dict.items():
         for cat in CATEGORIES:
             if error_df is not None:
-                sorted_index = sorted_locations_dict[cat][['PULocation']]
-                categorized_df = error_df.merge(sorted_index, on=['PULocation'])
+                sorted_index = sorted_locations_dict[cat][['PULocation','DOLocation']]
+                categorized_df = error_df.merge(sorted_index, on=['PULocation','DOLocation'])
                 
                 report_dict[cat]['MAE'][model] = categorized_df['error'].mean()            
                 report_dict[cat]['RMSE'][model] = np.sqrt(categorized_df['squared_error'].mean())
