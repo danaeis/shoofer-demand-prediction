@@ -215,11 +215,11 @@ def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dic
 
 ```{python}
 calculate_mean_error(predictions_dict, predictions_mean_error_dict)
-# for model in MODEL_LIST:
-#     for per in BASED_ON:
-#         for cat in CATEGORIES:
-#             print(f"shape of predictions_mean_dict[{model}][{per}][{cat}]: {predictions_mean_error_dict[model][per][cat].shape}")
-#             display(predictions_mean_error_dict[model][per][cat].head())
+for model in MODEL_LIST:
+    for per in BASED_ON:
+        for cat in CATEGORIES:
+            print(f"shape of predictions_mean_dict[{model}][{per}][{cat}]: {predictions_mean_error_dict[model][per][cat].shape}")
+            display(predictions_mean_error_dict[model][per][cat].head())
 ```
 
 ### Plot Mape for Models Predicted Demands
@@ -227,7 +227,7 @@ calculate_mean_error(predictions_dict, predictions_mean_error_dict)
 ```{python}
 def plot(predictions_mean_dict, per):
     
-    fig, axes = plt.subplots(nrows=12, ncols=1, figsize=(15,25))
+    fig, axes = plt.subplots(nrows=len(CATEGORIES)*len(METRICS), ncols=1, figsize=(15,25))
     for i, met in enumerate(METRICS):
         for j, cat in enumerate(CATEGORIES):
             for model,mean_df in predictions_mean_dict.items():
