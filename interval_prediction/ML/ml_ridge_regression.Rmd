@@ -41,13 +41,12 @@ INPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand
 OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/Ridge_predictions_phase2.parquet'
 
 
-FEATURE_LIST = ['zone',
-
-                'day_of_week',
+FEATURE_LIST = ['day_of_week',
                 'day_of_month',
+
+                'avrg_previous_2day_8interval',
                 
-                'max_previous_week_interval',
-    
+                'max_previous_week_interval',    
                 'max_previous_7exact_interval',
     
                 'previous_day_9interval',
@@ -55,7 +54,6 @@ FEATURE_LIST = ['zone',
                 'previous_day_17interval',
 
                 'diff_previous_2day_interval',
-
                 'diff_previous_2day_previous_interval',
     
                 'previous_day_interval',
@@ -126,7 +124,17 @@ def add_feature(dataset, lag_num):
     
     dataset['previous_day_9interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+1)
     dataset['previous_day_10interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+2)
-    dataset['previous_day_17interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+17)
+    dataset['previous_day_11interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+3)
+    dataset['previous_day_12interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+4)
+    dataset['previous_day_13interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+5)
+    dataset['previous_day_14interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+6)
+    dataset['previous_day_15interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+7)
+    dataset['previous_day_17interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+9)
+
+    
+    dataset['avrg_previous_2day_8interval'] = (8*dataset['previous_day_9interval']+7*dataset['previous_day_10interval']+\
+    6*dataset['previous_day_11interval']+5*dataset['previous_day_12interval']+4*dataset['previous_day_13interval']+\
+    3*dataset['previous_day_14interval']+2*dataset['previous_day_15interval']+dataset['previous_2week_interval'])/NUM_INTERVAL_PER_DAY
 
     
     dataset['diff_previous_2day_previous_interval'] = dataset['previous_day_17interval']-dataset['previous_day_9interval']

@@ -44,21 +44,21 @@ XGB_ridge_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-de
 XGB_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/XGB_predictions_phase2.parquet'
 
 
-FEATURE_LIST = ['zone',
-
-                'day_of_week',
+FEATURE_LIST = ['day_of_week',
                 'day_of_month',
 
                 'max_previous_week_interval',
-    
                 'max_previous_7exact_interval',
     
                 'previous_day_9interval',
                 'previous_day_10interval',
+                'previous_day_14interval',
+                'previous_day_15interval',
                 'previous_day_17interval',
 
+                'avrg_previous_2day_8interval',
+                
                 'diff_previous_2day_interval',
-
                 'diff_previous_2day_previous_interval',
     
                 'previous_day_interval',
@@ -83,7 +83,7 @@ VALIDATION_START_DATE = '2023-03-18'
 
 NUM_INTERVAL_PER_DAY = 8
 
-AUTO_TUNE = True
+AUTO_TUNE = False
 add_ridge_feature = False
 ```
 
@@ -137,7 +137,17 @@ def add_feature(dataset, lag_num):
     
     dataset['previous_day_9interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+1)
     dataset['previous_day_10interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+2)
-    dataset['previous_day_17interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+17)
+    dataset['previous_day_11interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+3)
+    dataset['previous_day_12interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+4)
+    dataset['previous_day_13interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+5)
+    dataset['previous_day_14interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+6)
+    dataset['previous_day_15interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+7)
+    dataset['previous_day_17interval'] = dataset.groupby('Location')['Demand'].shift(NUM_INTERVAL_PER_DAY+9)
+
+    
+    dataset['avrg_previous_2day_8interval'] = (8*dataset['previous_day_9interval']+7*dataset['previous_day_10interval']+\
+    6*dataset['previous_day_11interval']+5*dataset['previous_day_12interval']+4*dataset['previous_day_13interval']+\
+    3*dataset['previous_day_14interval']+2*dataset['previous_day_15interval']+dataset['previous_2week_interval'])/NUM_INTERVAL_PER_DAY
 
     
     dataset['diff_previous_2day_previous_interval'] = dataset['previous_day_17interval']-dataset['previous_day_9interval']
@@ -266,12 +276,12 @@ def grid_search(test_parameters, train_data, validation_data, feature_list):
 
 ```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
 if AUTO_TUNE:
-    params_test = { 'learning_rate':[0.02, 0.03, 0.04], 
-                    'subsample':[0.8, 0.9, 1], 
-                    'colsample_bytree':[0.8, 0.9, 1], 
-                    'max_depth':[8, 9, 10], 
-                    'gamma':[10, 100, 500],
-                    'n_estimators':[500, 700, 1000]
+    params_test = { 'learning_rate':[0.05, 0.1, 0.15], 
+                    'subsample':[0.7, 0.8, 0.9], 
+                    'colsample_bytree':[0.6, 0.8, 0.9], 
+                    'max_depth':[7, 8, 9, 10, 12], 
+                    'min_child_weight':[10, 20, 5],
+                    'n_estimators':[100]
                     }
 
     best_params, best_score = grid_search(
@@ -284,11 +294,11 @@ if AUTO_TUNE:
     print(best_params, best_score)
 else:
     best_params = {'colsample_bytree': 0.9, 
-                   'gamma': 100, 
-                   'learning_rate': 0.02, 
-                   'max_depth': 8, 
-                   'subsample': 0.9, 
-                   'n_estimators': 1000
+                   'min_child_weight': 20, 
+                   'learning_rate': 0.01, 
+                   'max_depth': 10, 
+                   'subsample': 0.8, 
+                   'n_estimators': 500
                    }
 ```
 
@@ -359,16 +369,6 @@ def evaluate(metric, metric_name, true_values, predicted_values):
     print(f'{metric_name} : {metric(true_values, predicted_values)}')
 ```
 
-```{python}
-def smape(y_true, y_pred):
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    numerator = np.abs(y_pred - y_true)
-    denominator = (np.abs(y_true) + np.abs(y_pred))
-    smape = np.mean(numerator / denominator)
-    return smape * 100
-```
-
 ```{python id="v4-GWghuSbnA"}
 def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
@@ -377,14 +377,14 @@ def evaluation(model_name, train_df, test_df, train_prediction_df, test_predicti
     evaluate(mean_absolute_error, 'MAE', train_df['Demand'], train_prediction_df)
     evaluate(mean_squared_error, 'MSE', train_df['Demand'], train_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', train_df['Demand'], train_prediction_df)
-    evaluate(smape, 'smape', train_df['Demand'], train_prediction_df)
+
 
     print(f'{model_name} test scores:')
 
     evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
     evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
     evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
-    evaluate(smape, 'smape', test_df['Demand'], test_prediction_df)
+
 
 ```
 
