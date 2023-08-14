@@ -35,7 +35,7 @@ REGRESSION_MODEL_PATH = BASE_PATH + "pairs_ridge_predictions.parquet"
 SAVE_PLOT_PATH = BASE_PATH + 'pngs/'
 
 MODEL_LIST = ['BASELINE_LAST_WEEK', 'REGRESSION_MODEL', 'XGB_MODEL']
-CATEGORIES = ['high_demand_pair_locations']
+CATEGORIES = ['high_demand_pair_locations','mid_demand_pair_locations']
 METRICS = ['MAPE', 'MAE', 'RMSE']
 BASED_ON = ['PULocation', 'Date', 'Day_of_week']
 
@@ -44,6 +44,7 @@ BASED_ON = ['PULocation', 'Date', 'Day_of_week']
 TEST_START_DATE = '2023-04-01'
 LAST_WEEK_TEST_START_DATE = '2023-03-25'
 
+HIGH_DEMAND_NUMS = 197
 
 SORT_METHODE = 'mean'
 
@@ -130,7 +131,8 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
     if (predictions_df is not None):
         sorted_index = predictions_df.groupby(['PULocation','DOLocation'])['Demand'].aggregate([SORT_METHODE]).sort_values(SORT_METHODE, ascending=False)
         sorted_index = sorted_index.reset_index()
-        sorted_locations_dict['high_demand_pair_locations'] = sorted_index
+        sorted_locations_dict['high_demand_pair_locations'] = sorted_index[:HIGH_DEMAND_NUMS]
+        sorted_locations_dict['mid_demand_pair_locations'] = sorted_index[HIGH_DEMAND_NUMS:]
         
 ```
 
@@ -245,8 +247,9 @@ def plot(predictions_mean_dict, per):
                             categorized_demand_df['pair_locations'] = [(a,b) for a,b in zip(categorized_demand_df['PULocation'],categorized_demand_df['DOLocation'])]
                             categorized_demand_df['pair_locations'] = categorized_demand_df['pair_locations'].astype(str)
                             categorized_demand_df.plot(x='pair_locations',y=met.lower(),kind='line',marker='.',ax = axes[len(CATEGORIES)*i+j],label=model)            
-        
-                axes[len(CATEGORIES)*i+j].set_title('Models '+met+' for '+cat, bbox=dict( alpha=0.5)) 
+                
+                axes[len(CATEGORIES)*i+j].set_title('Models '+met+' for '+cat, bbox=dict( alpha=0.5))
+                axes[len(CATEGORIES)*i+j].legend(loc='upper left', bbox_to_anchor=(1, 1))
         plt.tight_layout()
         plt.show()
     # plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
