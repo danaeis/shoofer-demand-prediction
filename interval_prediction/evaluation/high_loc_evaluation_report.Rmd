@@ -26,19 +26,18 @@ import warnings
 # Configs
 
 ```{python}
-BASE_PATH = "/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/"
+BASE_PATH = "/Users/maedeh/Desktop/data/"
 
 LABELED_PATH = BASE_PATH + "labels_phase2.parquet"
-XGB_MODEL_PATH = BASE_PATH + "XGB_predictions_phase2.parquet"
-RIDGE_MODEL_PATH = BASE_PATH + "Ridge_predictions_phase2.parquet"
-RF_RIDGE_MODEL_PATH = BASE_PATH + "RF_ridge_predictions_phase2.parquet"
+XGB_MODEL_PATH = BASE_PATH + "XGB_predictions_loc_phase2.parquet"
+RIDGE_MODEL_PATH = BASE_PATH + "Ridge_predictions_loc_phase2.parquet"
+RF_RIDGE_MODEL_PATH = BASE_PATH + "RF_ridge_predictions_loc_phase2.parquet"
 
 SAVE_PLOT_PATH = BASE_PATH + 'pngs/'
 
 
-
 MODEL_LIST = ['BASELINE_LAST_WEEK', 'RIDGE_MODEL', 'XGB_MODEL', 'RF_RIDGE_MODEL']
-CATEGORIES = ['high_demand_locations', 'mid_demand_locations', 'low_demand_locations', 'all_locations']
+CATEGORIES = ['high_demand_locations', 'low_demand_locations']
 METRICS = ['MAPE', 'MAE', 'RMSE']
 BASED_ON = ['Location', 'Date', 'Hour_interval', 'Day_of_week']
 
@@ -48,10 +47,9 @@ LAST_WEEK_TEST_START_DATE = '2023-03-25'
 
 
 NUM_INTERVAL_PER_DAY = 8
-HIGH_DEMAND_NUMS = 55
-MID_DEMAND_NUMS = 157
+HIGH_DEMAND_NUMS = 50
 NUM_LOC = 262
-SORT_METHODE = 'mean'
+SORT_METHOD = 'mean'
 
 
 
@@ -137,13 +135,13 @@ for model in MODEL_LIST:
 def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
     predictions_df = predictions_dict['BASELINE_LAST_WEEK']
     if (predictions_df is not None):
-        sorted_index = predictions_df.groupby(['Location','Hour_interval'])['Demand'].aggregate([SORT_METHODE]).sort_values(SORT_METHODE, ascending=False)
-        sorted_index = sorted_index.reset_index()
-        sorted_locations_dict['high_demand_locations'] = sorted_index[:HIGH_DEMAND_NUMS]
-        sorted_locations_dict['mid_demand_locations'] = sorted_index[HIGH_DEMAND_NUMS:MID_DEMAND_NUMS+HIGH_DEMAND_NUMS]
-        sorted_locations_dict['low_demand_locations'] = sorted_index[MID_DEMAND_NUMS+HIGH_DEMAND_NUMS:]
-        sorted_locations_dict['all_locations'] = sorted_index
-        
+        category_index = predictions_df.groupby(['Location'])['Demand'].aggregate([SORT_METHOD]).sort_values(SORT_METHOD,ascending=False).reset_index()
+        category_df = predictions_df.merge(category_index[:HIGH_DEMAND_NUMS], how='right', on=['Location'])
+        category_min_df = category_df.groupby(['Location','Hour_interval']).agg(Min=('Demand','min')).sort_values(by='Min',ascending=False).reset_index()
+        low_index=category_min_df[category_min_df['Min'].isin([0])]
+        high_index=category_min_df[~category_min_df['Min'].isin([0])]
+        sorted_locations_dict['high_demand_locations']=category_df.merge(high_index[['Location','Hour_interval']], on=['Location','Hour_interval'])[['Location','Hour_interval',SORT_METHOD]]
+        sorted_locations_dict['low_demand_locations']=category_df.merge(low_index[['Location','Hour_interval']], on=['Location','Hour_interval'])[['Location','Hour_interval',SORT_METHOD]]
 ```
 
 ```{python}
@@ -207,10 +205,10 @@ def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dic
                     categorized_mean_df.drop(columns='mse', inplace=True)
                     categorized_mean_df['mape'] = np.where(categorized_mean_df['mape']>100, 100, categorized_mean_df['mape'])
                     if per == 'Location':
-                        loc_demand_index = sorted_locations.groupby(['Location'])[SORT_METHODE].sum().sort_values(ascending=False).index
+                        loc_demand_index = sorted_locations.groupby(['Location'])[SORT_METHOD].sum().sort_values(ascending=False).index
                         categorized_mean_df = categorized_mean_df.reindex(loc_demand_index)
                     if per == 'Hour_interval':
-                        hour_demand_index = sorted_locations.groupby(['Hour_interval'])[SORT_METHODE].sum().sort_values(ascending=False).index
+                        hour_demand_index = sorted_locations.groupby(['Hour_interval'])[SORT_METHOD].sum().sort_values(ascending=False).index
                         categorized_mean_df = categorized_mean_df.reindex(hour_demand_index)
             
                     predictions_mean_dict[model][per][cat] = categorized_mean_df.reset_index()
@@ -220,11 +218,11 @@ def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dic
 
 ```{python}
 calculate_mean_error(predictions_dict, predictions_mean_error_dict)
-# for model in MODEL_LIST:
-#     for per in BASED_ON:
-#         for cat in CATEGORIES:
-#             print(f"shape of predictions_mean_dict[{model}][{per}][{cat}]: {predictions_mean_error_dict[model][per][cat].shape}")
-#             display(predictions_mean_error_dict[model][per][cat].head())
+for model in MODEL_LIST:
+    for per in BASED_ON:
+        for cat in CATEGORIES:
+            print(f"shape of predictions_mean_dict[{model}][{per}][{cat}]: {predictions_mean_error_dict[model][per][cat].shape}")
+            display(predictions_mean_error_dict[model][per][cat].head())
 ```
 
 ### Plot Mape for Models Predicted Demands
@@ -232,7 +230,7 @@ calculate_mean_error(predictions_dict, predictions_mean_error_dict)
 ```{python}
 def plot(predictions_mean_dict, per):
     
-    fig, axes = plt.subplots(nrows=12, ncols=1, figsize=(15,25))
+    fig, axes = plt.subplots(nrows=len(METRICS)*len(CATEGORIES), ncols=1, figsize=(10,10))
     for i, met in enumerate(METRICS):
         for j, cat in enumerate(CATEGORIES):
             for model,mean_df in predictions_mean_dict.items():
@@ -241,7 +239,7 @@ def plot(predictions_mean_dict, per):
                     categorized_demand_df[per] = categorized_demand_df[per].astype(str)
                     categorized_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[len(CATEGORIES)*i+j],label=model)            
     
-            axes[len(CATEGORIES)*i+j].set_title('Models '+met+' for '+str(HIGH_DEMAND_NUMS)+' '+ cat, bbox=dict( alpha=0.5)) 
+            axes[len(CATEGORIES)*i+j].set_title('Models '+met+' for '+str(HIGH_DEMAND_NUMS)+' '+cat, bbox=dict( alpha=0.5)) 
     plt.tight_layout()
     plt.show()
     # plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
