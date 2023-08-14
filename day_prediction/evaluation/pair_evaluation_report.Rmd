@@ -234,7 +234,7 @@ for model in MODEL_LIST:
 
 ```{python}
 def plot(predictions_mean_dict, per):
-        fig, axes = plt.subplots(nrows=len(CATEGORIES)*len(METRICS), ncols=1, figsize=(10,10))
+        fig, axes = plt.subplots(nrows=len(CATEGORIES)*len(METRICS), ncols=1, figsize=(15,20))
         for i, met in enumerate(METRICS):
             for j, cat in enumerate(CATEGORIES):
                 for model,mean_df in predictions_mean_dict.items():
