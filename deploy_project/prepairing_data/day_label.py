@@ -1,11 +1,11 @@
 import datetime
 import pandas as pd
-from dateutil.relativedelta import relativedelta  
 
-class Label_Data():
-    def __init__(self, dateset_path, end_date, period):
+
+class LabelData():
+    def __init__(self, dateset_path, end_date, start_date):
         self.END_DATE = datetime.date.fromisoformat(str(end_date))
-        self.START_DATE = datetime.date.fromisoformat(str(self.END_DATE - relativedelta(months=period)))
+        self.START_DATE = datetime.date.fromisoformat(str(start_date))
         self.INPUT_PATH = dateset_path
         
     def load_data(self):
@@ -55,8 +55,8 @@ class Label_Data():
         return self.labels_df
 
     def add_features(self):
-        self.data_features = pd.DataFrame(columns=self.labels_df.columns)
-        self.data_features = self.labels_df.copy()
+        labels_df = self.labeling()
+        self.data_features = labels_df.copy()
         self.data_features['Previous_day_demand'] = self.data_features.groupby(['Location'])['Demand'].shift(1)
         self.data_features['Previous_week_demand'] = self.data_features.groupby(['Location'])['Demand'].shift(7)
         self.data_features['Previous_2week_demand'] = self.data_features.groupby(['Location'])['Demand'].shift(14)
@@ -65,4 +65,4 @@ class Label_Data():
         self.data_features = self.data_features.sort_values(['Location', 'Date'], 
                                                             ascending=[True, True])
 
-        return self.data_features
+        return self.data_features, labels_df.columns
