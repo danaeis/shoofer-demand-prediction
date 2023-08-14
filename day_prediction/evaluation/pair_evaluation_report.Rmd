@@ -45,10 +45,6 @@ TEST_START_DATE = '2023-04-01'
 LAST_WEEK_TEST_START_DATE = '2023-03-25'
 
 
-
-HIGH_DEMAND_NUMS = 50
-NUM_LOC = 262
-
 SORT_METHODE = 'mean'
 
 warnings.filterwarnings('ignore')
@@ -247,7 +243,7 @@ def plot(predictions_mean_dict, per):
                             categorized_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[len(CATEGORIES)*i+j],label=model)            
                         else:
                             categorized_demand_df['pair_locations'] = [(a,b) for a,b in zip(categorized_demand_df['PULocation'],categorized_demand_df['DOLocation'])]
-                            categorized_demand_df['pair_locations'] = categorized_demand_df['pair'].astype(str)
+                            categorized_demand_df['pair_locations'] = categorized_demand_df['pair_locations'].astype(str)
                             categorized_demand_df.plot(x='pair_locations',y=met.lower(),kind='line',marker='.',ax = axes[len(CATEGORIES)*i+j],label=model)            
         
                 axes[len(CATEGORIES)*i+j].set_title('Models '+met+' for '+cat, bbox=dict( alpha=0.5)) 
