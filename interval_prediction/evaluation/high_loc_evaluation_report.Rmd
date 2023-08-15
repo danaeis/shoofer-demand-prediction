@@ -47,7 +47,7 @@ LAST_WEEK_TEST_START_DATE = '2023-03-25'
 
 
 NUM_INTERVAL_PER_DAY = 8
-HIGH_DEMAND_NUMS = 40
+HIGH_DEMAND_NUMS = 55
 SORT_METHOD = 'mean'
 
 
@@ -139,8 +139,10 @@ def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
         category_min_df = category_df.groupby(['Location','Hour_interval']).agg(Min=('Demand','min')).sort_values(by='Min',ascending=False).reset_index()
         low_index=category_min_df[category_min_df['Min'].isin([0])]
         high_index=category_min_df[~category_min_df['Min'].isin([0])]
-        sorted_locations_dict['high_demand_locations']=category_df.merge(high_index[['Location','Hour_interval']], on=['Location','Hour_interval'])[['Location','Hour_interval',SORT_METHOD]]
-        sorted_locations_dict['low_demand_locations']=category_df.merge(low_index[['Location','Hour_interval']], on=['Location','Hour_interval'])[['Location','Hour_interval',SORT_METHOD]]
+        category_df = category_df[['Location','Hour_interval',SORT_METHOD]].drop_duplicates()
+        sorted_locations_dict['high_demand_locations']=category_df.merge(high_index[['Location','Hour_interval']], on=['Location','Hour_interval'])
+        sorted_locations_dict['low_demand_locations']=category_df.merge(low_index[['Location','Hour_interval']], on=['Location','Hour_interval'])
+        
 ```
 
 ```{python}
@@ -229,7 +231,7 @@ for model in MODEL_LIST:
 ```{python}
 def plot(predictions_mean_dict, per):
     
-    fig, axes = plt.subplots(nrows=len(METRICS)*len(CATEGORIES), ncols=1, figsize=(10,10))
+    fig, axes = plt.subplots(nrows=len(METRICS)*len(CATEGORIES), ncols=1, figsize=(15,20))
     for i, met in enumerate(METRICS):
         for j, cat in enumerate(CATEGORIES):
             for model,mean_df in predictions_mean_dict.items():
@@ -239,6 +241,7 @@ def plot(predictions_mean_dict, per):
                     categorized_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[len(CATEGORIES)*i+j],label=model)            
     
             axes[len(CATEGORIES)*i+j].set_title('Models '+met+' for '+str(HIGH_DEMAND_NUMS)+' '+cat, bbox=dict( alpha=0.5)) 
+            axes[len(CATEGORIES)*i+j].legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.tight_layout()
     plt.show()
     # plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'

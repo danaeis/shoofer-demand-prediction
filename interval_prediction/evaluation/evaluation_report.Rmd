@@ -51,7 +51,7 @@ NUM_INTERVAL_PER_DAY = 8
 HIGH_DEMAND_NUMS = 55
 MID_DEMAND_NUMS = 157
 NUM_LOC = 262
-SORT_METHODE = 'mean'
+SORT_METHOD = 'mean'
 
 
 
@@ -137,7 +137,7 @@ for model in MODEL_LIST:
 def sort_locations_on_demand(predictions_dict,sorted_locations_dict):
     predictions_df = predictions_dict['BASELINE_LAST_WEEK']
     if (predictions_df is not None):
-        sorted_index = predictions_df.groupby(['Location','Hour_interval'])['Demand'].aggregate([SORT_METHODE]).sort_values(SORT_METHODE, ascending=False)
+        sorted_index = predictions_df.groupby(['Location','Hour_interval'])['Demand'].aggregate([SORT_METHOD]).sort_values(SORT_METHOD, ascending=False)
         sorted_index = sorted_index.reset_index()
         sorted_locations_dict['high_demand_locations'] = sorted_index[:HIGH_DEMAND_NUMS]
         sorted_locations_dict['mid_demand_locations'] = sorted_index[HIGH_DEMAND_NUMS:MID_DEMAND_NUMS+HIGH_DEMAND_NUMS]
@@ -207,10 +207,10 @@ def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dic
                     categorized_mean_df.drop(columns='mse', inplace=True)
                     categorized_mean_df['mape'] = np.where(categorized_mean_df['mape']>100, 100, categorized_mean_df['mape'])
                     if per == 'Location':
-                        loc_demand_index = sorted_locations.groupby(['Location'])[SORT_METHODE].sum().sort_values(ascending=False).index
+                        loc_demand_index = sorted_locations.groupby(['Location'])[SORT_METHOD].sum().sort_values(ascending=False).index
                         categorized_mean_df = categorized_mean_df.reindex(loc_demand_index)
                     if per == 'Hour_interval':
-                        hour_demand_index = sorted_locations.groupby(['Hour_interval'])[SORT_METHODE].sum().sort_values(ascending=False).index
+                        hour_demand_index = sorted_locations.groupby(['Hour_interval'])[SORT_METHOD].sum().sort_values(ascending=False).index
                         categorized_mean_df = categorized_mean_df.reindex(hour_demand_index)
             
                     predictions_mean_dict[model][per][cat] = categorized_mean_df.reset_index()
@@ -220,11 +220,11 @@ def calculate_mean_error(actual_predicted_dict: dict, predictions_mean_dict: dic
 
 ```{python}
 calculate_mean_error(predictions_dict, predictions_mean_error_dict)
-# for model in MODEL_LIST:
-#     for per in BASED_ON:
-#         for cat in CATEGORIES:
-#             print(f"shape of predictions_mean_dict[{model}][{per}][{cat}]: {predictions_mean_error_dict[model][per][cat].shape}")
-#             display(predictions_mean_error_dict[model][per][cat].head())
+for model in MODEL_LIST:
+    for per in BASED_ON:
+        for cat in CATEGORIES:
+            print(f"shape of predictions_mean_dict[{model}][{per}][{cat}]: {predictions_mean_error_dict[model][per][cat].shape}")
+            display(predictions_mean_error_dict[model][per][cat].head())
 ```
 
 ### Plot Mape for Models Predicted Demands
@@ -232,7 +232,7 @@ calculate_mean_error(predictions_dict, predictions_mean_error_dict)
 ```{python}
 def plot(predictions_mean_dict, per):
     
-    fig, axes = plt.subplots(nrows=12, ncols=1, figsize=(15,25))
+    fig, axes = plt.subplots(nrows=len(CATEGORIES)*len(METRICS), ncols=1, figsize=(15,30))
     for i, met in enumerate(METRICS):
         for j, cat in enumerate(CATEGORIES):
             for model,mean_df in predictions_mean_dict.items():
@@ -242,6 +242,7 @@ def plot(predictions_mean_dict, per):
                     categorized_demand_df.plot(x=per,y=met.lower(),kind='line',marker='.',ax = axes[len(CATEGORIES)*i+j],label=model)            
     
             axes[len(CATEGORIES)*i+j].set_title('Models '+met+' for '+str(HIGH_DEMAND_NUMS)+' '+ cat, bbox=dict( alpha=0.5)) 
+            axes[len(CATEGORIES)*i+j].legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.tight_layout()
     plt.show()
     # plot_name = SAVE_PLOT_PATH + 'MAPE_plot per '+per+'.svg'
