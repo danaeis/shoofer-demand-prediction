@@ -20,15 +20,16 @@ import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+# import shap
+import xgboost as xgb
+import geopandas as gpd
 
-from sklearn.linear_model import Ridge
-from sklearn.linear_model import Lasso
-from sklearn.linear_model import ElasticNet
-from itertools import product
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import LabelEncoder
+from sklearn.cluster import AgglomerativeClustering
+from itertools import product
 ```
 
 <!-- #region id="pSSMa3G2wGmF" -->
@@ -37,19 +38,26 @@ from sklearn.model_selection import GridSearchCV
 
 ```{python id="zIkDLK9zwGmG"}
 INPUT_PATH = 'datasets/'
+OUTPUT_PATH = 'results/rf_predictions.parquet'
 
-OUTPUT_PATH_TEST = 'results/ridge_test_predictions.parquet'
-OUTPUT_PATH_TRAIN = 'results/ridge_train_predictions.parquet'
+RIDGE_TEST_PATH = 'results/ridge_test_predictions.parquet'
+RIDGE_TRAIN_PATH = 'results/ridge_train_predictions.parquet'
 
 START_DATE = '2023-01-01'
 END_DATE = '2023-04-30'
 
 FEATURE_LIST = [
+                'Ridge_predict',
+
                 'Previous_week_max_demand',
                 'Previous_2week_max_demand',
 
                 'Previous_2week_demand',
                 'Previous_week_demand', 
+
+                'Previous_week_group_max_demand',
+                'Previous_week_group_min_demand',
+                'Previous_week_group_mean_demand',
 
                 'Previous_day_demand',
                 'Previous_2day_demand',
@@ -63,15 +71,16 @@ FEATURE_LIST = [
                 'Previous_11day_demand',
                 'Previous_12day_demand',
                 'Previous_13day_demand',
-                
-                #'Day_of_week',
-                #'Day_of_month'
+
+                #  'Day_of_month', 
+                #  'Day_of_week',
                 ]
 
 TEST_START_DATE = '2023-04-01'
 VALIDATION_START_DATE = '2023-03-21'
 
 GROUP_NUM = 3
+AUTO_TUNE = False
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -104,12 +113,28 @@ print(f'rides dataframe shape : {rides_df.shape}')
 rides_df.head()
 ```
 
+```{python}
+ridge_train_df = pd.read_parquet(RIDGE_TRAIN_PATH)
+ridge_test_df = pd.read_parquet(RIDGE_TEST_PATH)
+ridge_df = pd.concat([ridge_train_df, ridge_test_df], axis = 0)
+```
+
+```{python}
+print(f'ridge dataframe shape : {ridge_df.shape}')
+ridge_df.head()
+```
+
+```{python}
+regions_df = gpd.read_file('taxi_zones/taxi_zones.shp')
+regions_df = regions_df.rename(columns = {'LocationID' : 'Location'})
+```
+
 <!-- #region id="X2ES_CY6-fb5" -->
 ## Labeling
 <!-- #endregion -->
 
 ```{python id="a7mNMQ-zwGmH"}
-def labeling(dataset):
+def labeling(dataset, zones):
     dataset_labels = (
         dataset
         .groupby(['PULocationID', 'PU_date'])['PU_date']
@@ -135,22 +160,75 @@ def labeling(dataset):
         .merge(dataset_labels, how='left', on=['Location', 'Date'])
         .fillna(value=0)
     )
-
     return labels_df
+
+```
+
+```{python}
+regions_df['borough'] = LabelEncoder().fit_transform(regions_df[['borough', 'Location']]['borough'])
 ```
 
 ```{python id="VVRLakW_LeGp"}
-labeled_df = labeling(rides_df)
+labeled_df = labeling(rides_df, regions_df[['borough', 'Location']])
 ```
 
 ```{python id="0Gm5j5em28Xy"}
 print(f'labeled dataframe shape : {labeled_df.shape}')
-labeled_df.head(10)
+labeled_df.head()
 ```
 
-## Add Feature
+```{python}
+labeled_df.to_parquet('labels.parquet')
+```
+
+## Grouping Locations
+
+
+### Agglomerative Clustering
 
 ```{python}
+location_demand_df = labeled_df.groupby('Location')['Demand'].max().to_frame('Demand').sort_values(by = 'Demand').reset_index()
+clustering = AgglomerativeClustering(n_clusters = GROUP_NUM).fit(location_demand_df['Demand'].to_numpy().reshape(-1, 1))
+```
+
+```{python}
+plt.scatter(location_demand_df['Demand'], location_demand_df['Location'], c = clustering.labels_)
+plt.show()
+```
+
+```{python}
+def group_locations(location_demand_df, group_num):
+    locations = [[] for i in range(group_num)]
+    for i in range(group_num):
+        demand_values = location_demand_df['Demand'].to_numpy().reshape(-1, 1)[clustering.labels_ == i]
+        locations[i].append(
+            location_demand_df[(location_demand_df['Demand'] >= np.min(demand_values))
+            &(location_demand_df['Demand'] <= np.max(demand_values))]['Location'].values)
+    
+    return locations
+```
+
+```{python}
+sorted_group_labels  = [i for i in range(GROUP_NUM)]
+```
+
+```{python}
+grouped_locations = group_locations(location_demand_df, GROUP_NUM)
+```
+
+```{python}
+grouped_locations_dfs = []
+for i in range(GROUP_NUM):
+    one_group_demand_df = grouped_locations[sorted_group_labels[i]][0]
+    one_group_demand_df = labeled_df[labeled_df['Location'].isin(one_group_demand_df)].reset_index(drop = True)
+    grouped_locations_dfs.append(one_group_demand_df)
+```
+
+<!-- #region id="G0W2pR-70JJb" -->
+## Add Feature
+<!-- #endregion -->
+
+```{python id="ifvk6uWS6hnT"}
 def feature_engineering(dataset):
     dataset['Previous_day_demand'] = dataset.groupby(['Location'])['Demand'].shift(1)
     dataset['Previous_2day_demand'] = dataset.groupby(['Location'])['Demand'].shift(2)
@@ -170,18 +248,84 @@ def feature_engineering(dataset):
     dataset['Previous_week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=7).max().reset_index(drop = True)
     dataset['Previous_2week_max_demand'] = dataset.groupby('Location')['Demand'].rolling(window=14).max().reset_index(drop = True)
 
-    dataset['Day_of_week'] = dataset['Date'].dt.dayofweek + 1
+    data_per_date = []
+
+    # Get the unique dates from the DataFrame
+    unique_dates = dataset['Date'].unique()
+
+    # Number of days to look back (in this case, 7 days)
+    days_to_look_back = 7
+
+    # Iterate through each date
+    for date in unique_dates:
+        # Filter the DataFrame to get the 7 past day rows for the current date
+        past_7_days_df = dataset[dataset['Date'] >= date - pd.Timedelta(days=days_to_look_back)]
+        past_7_days_df = past_7_days_df[past_7_days_df['Date'] < date]
+        
+        # Convert the filtered DataFrame to a dictionary with location as keys and demand values as values
+        data_dict = past_7_days_df.set_index('Location')['Demand'].to_dict()
+        data_per_date.append(data_dict)
+
+    # Create an empty list to store the maximum demand for each date
+    max_demand_per_date = []
+    min_demand_per_date = []
+    mean_demand_per_date = []
+
+    # Iterate through the data_per_date list
+    for data_dict in data_per_date:
+        if data_dict:  # Check if the dictionary is not empty
+            max_demand_per_date.append(max(data_dict.values()))
+            min_demand_per_date.append(min(data_dict.values()))
+            mean_demand_per_date.append(np.mean(list(data_dict.values())))
+        else:
+            max_demand_per_date.append(None)
+            min_demand_per_date.append(None)
+            mean_demand_per_date.append(None)
+
+    # Convert the list to a numpy array
+    max_demand_per_date = np.array(max_demand_per_date)
+    min_demand_per_date = np.array(min_demand_per_date)
+    mean_demand_per_date = np.array(mean_demand_per_date)
+
+    max_demand_df = pd.DataFrame({'Date': unique_dates, 'Previous_week_group_max_demand': max_demand_per_date})
+    min_demand_df = pd.DataFrame({'Date': unique_dates, 'Previous_week_group_min_demand': min_demand_per_date})
+    mean_demand_df = pd.DataFrame({'Date': unique_dates, 'Previous_week_group_mean_demand': mean_demand_per_date})
+
+    dataset = dataset.merge(max_demand_df, on='Date')
+    dataset = dataset.merge(min_demand_df, on='Date')
+    dataset = dataset.merge(mean_demand_df, on='Date')
+
+    dataset['Day_of_week'] = dataset['Date'].dt.dayofweek   
     dataset['Day_of_month'] = dataset['Date'].dt.day
     
     return dataset
 ```
 
 ```{python}
-features_df = feature_engineering(labeled_df)
-features_df.dropna(inplace = True)
+grouped_locations_features_dfs = []
+for i in range(GROUP_NUM):
+    one_group_features_df = feature_engineering(grouped_locations_dfs[i])
+    one_group_features_df = one_group_features_df.dropna().reset_index(drop = True)
+    one_group_features_df['Previous_week_group_max_demand'] = one_group_features_df['Previous_week_group_max_demand'].astype('float64')
+    one_group_features_df['Previous_week_group_min_demand'] = one_group_features_df['Previous_week_group_min_demand'].astype('float64')
+    one_group_features_df['Previous_week_group_mean_demand'] = one_group_features_df['Previous_week_group_mean_demand'].astype('float64')
+    grouped_locations_features_dfs.append(one_group_features_df)
 ```
 
-```{python}
+```{python id="12zNfv8YwGmK"}
+features_df = pd.concat(grouped_locations_features_dfs, axis = 0)
+
+features_df = (
+        features_df
+        .merge(ridge_df, how='left', on=['Location', 'Date'])
+        .rename(columns = {'Predicted_demand' : 'Ridge_predict'})
+        )
+
+features_df = features_df.sort_values(by = ['Location', 'Date']).reset_index(drop = True)
+features_df = features_df
+```
+
+```{python id="bJxWEkiD3VOZ"}
 print(f'features dataframe shape : {features_df.shape}')
 features_df.head()
 ```
@@ -207,7 +351,7 @@ train_df, test_df = train_test_splitting(features_df, TEST_START_DATE)
 grid_search_train_df, valid_df = train_test_splitting(train_df, VALIDATION_START_DATE) 
 ```
 
-```{python id="xxGdRZfqwGmL", outputId="58609337-c472-48f5-c7fc-e9d7c17aba4f"}
+```{python id="xxGdRZfqwGmL"}
 print(f'train dataframe shape : {train_df.shape}')
 train_df.head()
 ```
@@ -226,12 +370,12 @@ test_df.head()
 # Model Training
 <!-- #endregion -->
 
-<!-- #region id="PxYfxyCHz_Z3" -->
-### **Ridge Regression**
+<!-- #region id="mIhvw9lH92sa" -->
+## **Random Forest**
 <!-- #endregion -->
 
-<!-- #region id="CJn4YIBtKcL_" -->
-#### Model Tuning
+<!-- #region id="13gFIyYfZyxh" -->
+### Model Tuning
 <!-- #endregion -->
 
 ```{python id="sOMPo5ryBm8g"}
@@ -242,10 +386,6 @@ def grid_search(model_class, param_grid, train_df, val_df, feature_list):
     for params in product(*param_grid.values()):
         current_params = dict(zip(param_grid.keys(), params))
         current_model = model_class(**current_params)
-        # model = Pipeline([
-        #     ('scaler', StandardScaler()),
-        #     ('model', current_model)
-        # ])
         current_model.fit(train_df[feature_list], train_df['Demand'])
         
         y_val_pred = current_model.predict(val_df[feature_list])
@@ -258,47 +398,61 @@ def grid_search(model_class, param_grid, train_df, val_df, feature_list):
     return best_params, best_val_loss
 ```
 
-```{python}
-model = Ridge
-best_params, best_score = grid_search(
-    model, 
-    {'alpha':[1, 10, 100],
-     },
-    grid_search_train_df,
-    valid_df, 
-    feature_list = FEATURE_LIST
-    )
+```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
+if AUTO_TUNE:
+    params_test = {
+                    'bootstrap' : [True], 
+                    'max_depth' : [10, 11, 12], 
+                    'min_samples_leaf' : [1, 2, 5, 10], 
+                    'max_features': [0.6, 0.7, 0.8, 0.9], 
+                    'n_jobs' : [-1], 
+                    'n_estimators' : [300], 
+                    'oob_score' : [True]
+                  }
 
-print(best_params, best_score)
+
+    best_params, best_score = grid_search(
+        model_class = RandomForestRegressor, 
+        param_grid = params_test,
+        train_df = grid_search_train_df, 
+        val_df = valid_df,
+        feature_list = FEATURE_LIST, 
+        )
+    
+    print(best_params, best_score)
+else:
+    best_params = {'bootstrap': True, 
+                   'max_depth': 11, 
+                   'min_samples_leaf': 5, 
+                   'max_features': 0.7, 
+                   'n_jobs': -1, 
+                   'n_estimators': 300, 
+                   'oob_score': True}
+    
+    
 ```
 
-<!-- #region id="AxN2E_9Q1yHS" -->
-#### Prediction
+<!-- #region id="H0IHB8t41NB6" -->
+### Prediction
 <!-- #endregion -->
 
 ```{python id="pbhM5Oe6PjW7"}
 def model_predict(model, train_data, test_data, feature_list):
 
     model.fit(train_data[feature_list], train_data['Demand'])
-
     train_predict_df = model.predict(train_data[feature_list])
     test_predict_df = model.predict(test_data[feature_list])
 
     return train_predict_df, test_predict_df
 ```
 
-```{python id="MulwYZc7LK7v"}
-model = Ridge(**best_params)
-# model = Pipeline([
-#             ('scaler', StandardScaler()),
-#             ('model', base_model)
-#         ])
-
-train_prediction_df , test_prediction_df = model_predict(model, train_df, test_df, FEATURE_LIST)
+```{python id="5AdQtdSqN7m9"}
+model = RandomForestRegressor(**best_params)
+train_prediction_df, test_prediction_df = model_predict(model, train_df, test_df, FEATURE_LIST)
 ```
 
-<!-- #region id="jJYHtg2oRqvS" -->
-#### Visualization
+<!-- #region id="J0EYl9KtTfo7" -->
+### Visualization
 <!-- #endregion -->
 
 ```{python id="ao6nw8xsRvB9"}
@@ -331,12 +485,12 @@ def prediction_visualization(train_data, test_data, train_prediction_df, test_pr
     plt.show()
 ```
 
-```{python colab={'base_uri': 'https://localhost:8080/', 'height': 887}, id="gOyNantNRtda", outputId="dc7796cf-c196-421d-bd56-1d312334dee4"}
+```{python id="deyLWLmZThMJ", outputId="4d0094aa-099c-490f-aa82-281ee16bae01"}
 prediction_visualization(train_df, test_df, train_prediction_df, test_prediction_df)
 ```
 
-<!-- #region id="RBsqB5hnSuPP" -->
-#### Evaluation
+<!-- #region id="lERphf0kTist" -->
+### Evaluation
 <!-- #endregion -->
 
 ```{python id="BcGvcilUWEEC"}
@@ -345,23 +499,22 @@ def evaluate(metric, metric_name, true_values, predicted_values):
 ```
 
 ```{python id="v4-GWghuSbnA"}
-def evaluation(model_name, train_data, test_data, train_prediction_df, test_prediction_df):
+def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
 
-    evaluate(mean_absolute_error, 'MAE', train_data['Demand'], train_prediction_df)
-    evaluate(mean_squared_error, 'MSE', train_data['Demand'], train_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', train_data['Demand'], train_prediction_df)
+    evaluate(mean_absolute_error, 'MAE', train_df['Demand'], train_prediction_df)
+    evaluate(mean_squared_error, 'MSE', train_df['Demand'], train_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', train_df['Demand'], train_prediction_df)
 
     print(f'\n{model_name} test scores:')
 
-    evaluate(mean_absolute_error, 'MAE', test_data['Demand'], test_prediction_df)
-    evaluate(mean_squared_error, 'MSE', test_data['Demand'], test_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', test_data['Demand'], test_prediction_df)
-
+    evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
+    evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
 ```
 
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="vUBqNgIwSwKe", outputId="c05d64b8-b525-458d-96db-757e94a57d89"}
-evaluation('Ridge Regression', train_df, test_df, train_prediction_df, test_prediction_df)
+```{python id="qSZwIFprTkqK", outputId="7ae94952-ec22-410a-9d26-6e05a96af6ab"}
+evaluation('Random Forest', train_df, test_df, train_prediction_df, test_prediction_df)
 ```
 
 # File Saving
@@ -381,21 +534,14 @@ def prediction_labeling(pred_df, labeled_df):
 ```
 
 ```{python}
-labeled_test_prediction_df = prediction_labeling(test_prediction_df, test_df)
-labeled_train_prediction_df = prediction_labeling(train_prediction_df, train_df)
+labeled_prediction_df = prediction_labeling(test_prediction_df, test_df)
 ```
 
 ```{python}
-print(f'labeled prediction dataframe shape : {labeled_test_prediction_df.shape}')
-labeled_test_prediction_df.head()
+print(f'labeled prediction dataframe shape : {labeled_prediction_df.shape}')
+labeled_prediction_df.head()
 ```
 
 ```{python}
-print(f'labeled prediction dataframe shape : {labeled_train_prediction_df.shape}')
-labeled_train_prediction_df.head()
-```
-
-```{python}
-save_predictions(labeled_train_prediction_df, OUTPUT_PATH_TRAIN)
-save_predictions(labeled_test_prediction_df, OUTPUT_PATH_TEST)
+save_predictions(labeled_prediction_df, OUTPUT_PATH)
 ```
