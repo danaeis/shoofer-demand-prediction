@@ -18,7 +18,7 @@ jupyter:
 
 ```{python id="AnwSHO1L97I5"}
 from itertools import product
-from sklearn.linear_model import Ridge
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 from sklearn.model_selection import GridSearchCV
 import datetime
@@ -38,7 +38,10 @@ warnings.filterwarnings('ignore')
 
 ```{python id="zIkDLK9zwGmG"}
 INPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/features_df_phase2.parquet'
-OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/Ridge_predictions_phase2.parquet'
+Ridge_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/Ridge_feature_predictions_phase2.parquet'
+RF_ridge_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/RF_ridge_predictions_phase2.parquet'
+RF_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/RF_predictions_phase2.parquet'
+
 
 
 FEATURE_LIST = ['day_of_week',
@@ -46,11 +49,16 @@ FEATURE_LIST = ['day_of_week',
 
                 'avrg_previous_2day_8interval',
                 
-                'max_previous_week_interval',    
+                'max_previous_week_interval',
+                'max_previous_2week_interval',
+    
                 'max_previous_7exact_interval',
+                'max_previous_14exact_interval',
     
                 'previous_day_9interval',
                 'previous_day_10interval',
+                'previous_day_14interval',
+                'previous_day_15interval',
                 'previous_day_17interval',
 
                 'diff_previous_2day_interval',
@@ -78,6 +86,8 @@ VALIDATION_START_DATE = '2023-03-18'
 
 NUM_INTERVAL_PER_DAY = 8
 
+AUTO_TUNE = True
+add_ridge_feature = True
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -91,8 +101,20 @@ NUM_INTERVAL_PER_DAY = 8
 
 ```{python id="87BFHUu1-z73"}
 features_df = pd.read_parquet(INPUT_PATH, engine='pyarrow')
-print(f'rfeatures dataframe shape : {features_df.shape}')
+```
+
+```{python id="hCN-11QT3bp1"}
+print(f'features dataframe shape : {features_df.shape}')
 features_df.head()
+```
+
+```{python}
+ridge_df = pd.read_parquet(Ridge_PATH, engine='pyarrow')
+```
+
+```{python}
+print(f'rides dataframe shape : {ridge_df.shape}')
+ridge_df.head()
 ```
 
 ## Add feature
@@ -145,8 +167,6 @@ def add_feature(dataset, lag_num):
 
     
     return dataset
-
-
 ```
 
 ```{python}
@@ -157,14 +177,32 @@ new_features_df.head()
 
 ```{python}
 def feature_selection(dataset, FEATURE_LIST):
+    
     dataset = dataset[['Location','Date','Hour_interval','Demand']+FEATURE_LIST]
     dataset.dropna(inplace = True)
+    
     return dataset
 ```
 
 ```{python}
 selected_features_df = feature_selection(new_features_df, FEATURE_LIST)
-print(f'selected features dataframe shape : {selected_features_df.shape}')
+print(f'features dataframe shape : {selected_features_df.shape}')
+selected_features_df.head()
+```
+
+```{python}
+def join_ridge_feature(dataset, ridge_df, FEATURE_LIST):
+
+    dataset = dataset.merge(ridge_df, how='outer', on = ['Location','Date','Hour_interval'])
+    FEATURE_LIST.append('Predicted_demand')
+    
+    return dataset, FEATURE_LIST
+```
+
+```{python}
+if add_ridge_feature:
+    selected_features_df, FEATURE_LIST = join_ridge_feature(selected_features_df, ridge_df, FEATURE_LIST)
+    print(f'final features dataframe shape : {selected_features_df.shape}')
 selected_features_df.head()
 ```
 
@@ -185,9 +223,9 @@ def train_test_splitting(dataset, START_DATE):
 train_df, test_df = train_test_splitting(selected_features_df, TEST_START_DATE)
 ```
 
-```{python id="xxGdRZfqwGmL", outputId="58609337-c472-48f5-c7fc-e9d7c17aba4f"}
+```{python id="xxGdRZfqwGmL"}
 print(f'train dataframe shape : {train_df.shape}')
-train_df.tail()
+train_df.head()
 ```
 
 ```{python id="uPbINwH224Hy"}
@@ -195,16 +233,16 @@ print(f'test dataframe shape : {test_df.shape}')
 test_df.head()
 ```
 
-```{python id="3xH4VMGNwGmK"}
+```{python}
 gridsearch_train_df, validation_df = train_test_splitting(train_df, VALIDATION_START_DATE)
 ```
 
-```{python id="uPbINwH224Hy"}
+```{python}
 print(f'gridsearch_train dataframe shape : {gridsearch_train_df.shape}')
 gridsearch_train_df.head()
 ```
 
-```{python id="uPbINwH224Hy"}
+```{python}
 print(f'validation dataframe shape : {validation_df.shape}')
 validation_df.head()
 ```
@@ -213,44 +251,66 @@ validation_df.head()
 # Model Training
 <!-- #endregion -->
 
-<!-- #region id="PxYfxyCHz_Z3" -->
-## **Ridge Regression**
+<!-- #region id="mIhvw9lH92sa" -->
+## **Gradient Boosting Regressor**
 <!-- #endregion -->
 
-<!-- #region id="CJn4YIBtKcL_" -->
+<!-- #region id="13gFIyYfZyxh" -->
 ### Model Tuning
 <!-- #endregion -->
 
 ```{python id="sOMPo5ryBm8g"}
-def grid_search(test_parameters, train_data, validation_data, feature_list = FEATURE_LIST):
+def grid_search(test_parameters, train_data, validation_data, feature_list):
     best_score = float('inf')
     best_params = None
     param_combination = product(*test_parameters.values())
+    
     for param in param_combination:
+
         param_dict = dict(zip(test_parameters.keys(), param))
-        model = Ridge(**param_dict)
+        model = RandomForestRegressor(**param_dict)
         model.fit(train_data[feature_list], train_data['Demand'])
+        
         validation_predict_df = model.predict(validation_data[feature_list])
         score = mean_squared_error(validation_data['Demand'], validation_predict_df)
+        
         if score<best_score:
             best_score = score
             best_params = param_dict
+            
     return best_params, best_score
 ```
 
-```{python}
-model = Ridge()
-best_params, best_score = grid_search(
-    {'alpha':[100000,500000,1000000]},
-    gridsearch_train_df, 
-    validation_df, 
-    feature_list = FEATURE_LIST
-    )
+```{python id="cm3YTQCMZVvu", outputId="4cf0ed3b-0243-476a-af87-35db760c9e5c"}
+if AUTO_TUNE:
+    params_test = {
+                    'oob_score': [True],
+                    'max_features': [0.6, 0.7], 
+                    'max_depth': [12, 14], 
+                    'min_samples_leaf': [2, 5, 8],
+                    'n_estimators': [300]
+                }
 
-print(best_params, best_score)
+    best_params, best_score = grid_search(
+        test_parameters = params_test,
+        train_data = gridsearch_train_df,
+        validation_data = validation_df,
+        feature_list = FEATURE_LIST
+        )
+    
+    print(best_params, best_score)
+else:
+    best_params = {
+                    'oob_score': True,
+                    'max_features': 0.6, 
+                    'max_depth': 14, 
+                    'min_samples_leaf': 5,
+                    'n_estimators': 500
+                   }
+
 ```
 
-<!-- #region id="AxN2E_9Q1yHS" -->
+<!-- #region id="H0IHB8t41NB6" -->
 ### Prediction
 <!-- #endregion -->
 
@@ -258,32 +318,30 @@ print(best_params, best_score)
 def model_predict(model, train_data, test_data, feature_list):
 
     model.fit(train_data[feature_list], train_data['Demand'])
-
-
+    
     train_predict_df  = model.predict(train_data[feature_list])
     test_predict_df  = model.predict(test_data[feature_list])
 
     return train_predict_df, test_predict_df
 ```
 
-```{python id="MulwYZc7LK7v"}
-model = Ridge(**best_params)
-train_prediction_df , test_prediction_df  = model_predict(model, train_df, test_df, FEATURE_LIST)
+```{python id="5AdQtdSqN7m9"}
+model = RandomForestRegressor(**best_params)
+train_prediction_df, test_prediction_df = model_predict(model, train_df, test_df, FEATURE_LIST)
 ```
 
-<!-- #region id="jJYHtg2oRqvS" -->
+<!-- #region id="J0EYl9KtTfo7" -->
 ### Visualization
 <!-- #endregion -->
 
 ```{python id="ao6nw8xsRvB9"}
 def prediction_visualization(train_data, test_data, train_prediction_df, test_prediction_df):
 
-
     predicted_train_df = train_data
     predicted_test_df = test_data
     predicted_train_df['Predicted'] = train_prediction_df
     predicted_test_df['Predicted'] = test_prediction_df
-
+    
     train_data = train_data.groupby(['Date','Hour_interval'])['Demand'].sum()
     test_data = test_data.groupby(['Date','Hour_interval'])['Demand'].sum()
     predicted_train_df = predicted_train_df.groupby(['Date','Hour_interval'])['Predicted'].sum()
@@ -306,11 +364,11 @@ def prediction_visualization(train_data, test_data, train_prediction_df, test_pr
     plt.show()
 ```
 
-```{python colab={'base_uri': 'https://localhost:8080/', 'height': 887}, id="gOyNantNRtda", outputId="dc7796cf-c196-421d-bd56-1d312334dee4"}
+```{python id="deyLWLmZThMJ", outputId="4d0094aa-099c-490f-aa82-281ee16bae01"}
 prediction_visualization(train_df, test_df, train_prediction_df, test_prediction_df)
 ```
 
-<!-- #region id="RBsqB5hnSuPP" -->
+<!-- #region id="lERphf0kTist" -->
 ### Evaluation
 <!-- #endregion -->
 
@@ -319,25 +377,54 @@ def evaluate(metric, metric_name, true_values, predicted_values):
     print(f'{metric_name} : {metric(true_values, predicted_values)}')
 ```
 
+```{python}
+def smape(y_true, y_pred):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    numerator = np.abs(y_pred - y_true)
+    denominator = (np.abs(y_true) + np.abs(y_pred))
+    smape = np.mean(numerator / denominator)
+    return smape * 100
+```
+
 ```{python id="v4-GWghuSbnA"}
-def evaluation(model_name, train_data, test_data, train_prediction_df, test_prediction_df):
+def evaluation(model_name, train_df, test_df, train_prediction_df, test_prediction_df):
     print(f'{model_name} train scores:')
 
 
-    evaluate(mean_absolute_error, 'MAE', train_data['Demand'], train_prediction_df)
-    evaluate(mean_squared_error, 'MSE', train_data['Demand'], train_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', train_data['Demand'], train_prediction_df)
+    evaluate(mean_absolute_error, 'MAE', train_df['Demand'], train_prediction_df)
+    evaluate(mean_squared_error, 'MSE', train_df['Demand'], train_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', train_df['Demand'], train_prediction_df)
+    evaluate(smape, 'smape', train_df['Demand'], train_prediction_df)
 
     print(f'{model_name} test scores:')
 
-    evaluate(mean_absolute_error, 'MAE', test_data['Demand'], test_prediction_df)
-    evaluate(mean_squared_error, 'MSE', test_data['Demand'], test_prediction_df)
-    evaluate(mean_absolute_percentage_error, 'MAPE', test_data['Demand'], test_prediction_df)
+    evaluate(mean_absolute_error, 'MAE', test_df['Demand'], test_prediction_df)
+    evaluate(mean_squared_error, 'MSE', test_df['Demand'], test_prediction_df)
+    evaluate(mean_absolute_percentage_error, 'MAPE', test_df['Demand'], test_prediction_df)
+    evaluate(smape, 'smape', test_df['Demand'], test_prediction_df)
 
 ```
 
-```{python colab={'base_uri': 'https://localhost:8080/'}, id="vUBqNgIwSwKe", outputId="c05d64b8-b525-458d-96db-757e94a57d89"}
-evaluation('Ridge Regression', train_df, test_df, train_prediction_df, test_prediction_df)
+```{python id="qSZwIFprTkqK", outputId="7ae94952-ec22-410a-9d26-6e05a96af6ab"}
+evaluation('RF', train_df, test_df, train_prediction_df, test_prediction_df)
+```
+
+<!-- #region id="_286hlGi7VWD" -->
+### Feature Importance and SHAPE
+<!-- #endregion -->
+
+```{python id="osueYsNP1NB8", outputId="b3c13ee6-bd74-4470-a8c5-558df5416e28"}
+importance = model.feature_importances_
+sorted_indices = np.argsort(importance)[::-1]
+plt.figure(figsize=(8, 6))
+plt.barh(range(len(FEATURE_LIST)), importance[sorted_indices])
+plt.yticks(range(len(FEATURE_LIST)), [FEATURE_LIST[i] for i in sorted_indices], rotation=45, ha='right')
+plt.xlabel('Importance')
+plt.ylabel('feature')
+plt.title('Feature Importances in Random Forest Model')
+plt.tight_layout()
+plt.show()
 ```
 
 # File Saving
@@ -349,9 +436,8 @@ def save_predictions(dataset, path):
 
 ```{python}
 def prediction_labeling(pred_df, labeled_df):
-    pred_df = pd.DataFrame(pred_df, columns = ['Predicted_demand'])
     labeled_df.reset_index(inplace = True)
-    labeled_prediction_df = labeled_df[['Location', 'Date','Hour_interval']]
+    labeled_prediction_df = labeled_df[['Location', 'Date', 'Hour_interval']]
     labeled_prediction_df['Predicted_demand'] = pred_df
     return labeled_prediction_df
 ```
@@ -366,6 +452,11 @@ labeled_prediction_df.head()
 ```
 
 ```{python}
+if add_ridge_feature:
+    OUTPUT_PATH = RF_ridge_PATH
+else:
+    OUTPUT_PATH = RF_PATH
+
 save_predictions(labeled_prediction_df, OUTPUT_PATH)
 ```
 
