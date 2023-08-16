@@ -1,12 +1,14 @@
+
 #Data sets#
 ###########
 *.parquet
+*.svg
+
+datasets/
+results/
+<<<<<<< HEAD
+catboost_info/
 data/
-
-#Config files#
-##############
-
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
+=======
+>>>>>>> 45f0c0ab68f836182a6d1380e7d21a6f7517393d
 
