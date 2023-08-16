@@ -79,7 +79,7 @@ TEST_START_DATE = '2023-04-01'
 VALIDATION_START_DATE = '2023-03-21'
 
 GROUP_NUM = 3
-AUTO_TUNE = True
+AUTO_TUNE = False
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
