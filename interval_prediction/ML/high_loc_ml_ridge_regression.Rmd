@@ -38,21 +38,23 @@ warnings.filterwarnings('ignore')
 
 ```{python id="zIkDLK9zwGmG"}
 INPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/features_df_phase2.parquet'
-OUTPUT_PATH = '/Users/maedeh/Desktop/demand_project/demand_project/shoofer-demand-prediction/data/Ridge_predictions_phase2.parquet'
+OUTPUT_PATH = '/Users/maedeh/Desktop/data/Ridge_predictions_loc_phase2.parquet'
 
 
 FEATURE_LIST = ['day_of_week',
                 'day_of_month',
 
-                'avrg_previous_2day_8interval',
-                
-                'max_previous_week_interval',    
+                'max_previous_week_interval',
                 'max_previous_7exact_interval',
     
                 'previous_day_9interval',
                 'previous_day_10interval',
+                'previous_day_14interval',
+                'previous_day_15interval',
                 'previous_day_17interval',
 
+                'avrg_previous_2day_8interval',
+                
                 'diff_previous_2day_interval',
                 'diff_previous_2day_previous_interval',
     
@@ -77,7 +79,8 @@ TEST_START_DATE = '2023-04-1'
 VALIDATION_START_DATE = '2023-03-18'
 
 NUM_INTERVAL_PER_DAY = 8
-
+HIGH_DEMAND_NUMS = 55
+SORT_METHOD = 'mean'
 ```
 
 <!-- #region id="5eS5BQE9wGmK" -->
@@ -172,6 +175,35 @@ selected_features_df.head()
 ## Split Train and Test Data
 <!-- #endregion -->
 
+```{python}
+def high_demand_split(dataset):
+    high_index = dataset.groupby(['Location'])['Demand'].aggregate([SORT_METHOD]).sort_values(SORT_METHOD,ascending=False).reset_index()
+    high_demand_df = dataset[dataset['Location'].isin(high_index['Location'][:HIGH_DEMAND_NUMS])]
+    return high_demand_df
+```
+
+```{python}
+High_demand_df = high_demand_split(selected_features_df)
+print(f'High_demand_selected_feature dataframe shape : {High_demand_df.shape}')
+High_demand_df.head()
+```
+
+```{python}
+def high_demand_split(dataset):
+    high_index = dataset.groupby(['Location'])['Demand'].aggregate([SORT_METHOD]).sort_values(SORT_METHOD,ascending=False).reset_index()
+    high_loc_df = dataset[dataset['Location'].isin(high_index['Location'][:HIGH_DEMAND_NUMS])]
+    high_loc_hour_df = high_loc_df[~high_loc_df['Hour_interval'].isin([3,6])]
+    high_loc_hour_df = high_loc_hour_df.groupby(['Location','Hour_interval']).agg(Min=('Demand','min')).sort_values(by='Min',ascending=False).reset_index()
+    high_demand_df = dataset.merge(high_loc_hour_df[['Location','Hour_interval']], on=['Location','Hour_interval'])
+    return high_demand_df
+```
+
+```{python}
+High_demand_df = high_demand_split(selected_features_df)
+print(f'High_demand_selected_feature dataframe shape : {High_demand_df.shape}')
+High_demand_df.head()
+```
+
 ```{python id="CMY1G1lmwGmI"}
 def train_test_splitting(dataset, START_DATE):
 
@@ -182,7 +214,7 @@ def train_test_splitting(dataset, START_DATE):
 ```
 
 ```{python id="3xH4VMGNwGmK"}
-train_df, test_df = train_test_splitting(selected_features_df, TEST_START_DATE)
+train_df, test_df = train_test_splitting(High_demand_df, TEST_START_DATE)
 ```
 
 ```{python id="xxGdRZfqwGmL", outputId="58609337-c472-48f5-c7fc-e9d7c17aba4f"}
@@ -241,7 +273,7 @@ def grid_search(test_parameters, train_data, validation_data, feature_list = FEA
 ```{python}
 model = Ridge()
 best_params, best_score = grid_search(
-    {'alpha':[100000,500000,1000000]},
+    {'alpha':[80000,100000,500000]},
     gridsearch_train_df, 
     validation_df, 
     feature_list = FEATURE_LIST
