@@ -29,12 +29,13 @@ BASE_PATH = "data/"
 
 LABELED_PATH = BASE_PATH + "labels.parquet"
 XGB_MODEL_PATH = BASE_PATH + "results/xgb_predictions.parquet"
+OLD_XGB_MODEL_PATH = BASE_PATH + "results/xgb_predictions_old.parquet"
 REGRESSION_MODEL_PATH = BASE_PATH + "results/ridge_test_predictions.parquet"
 RF_MODEL_PATH = BASE_PATH + "results/rf_predictions.parquet"
 
 SAVE_PLOT_PATH = BASE_PATH + 'pngs/'
 
-MODEL_LIST = ['BASELINE_LAST_WEEK', 'REGRESSION_MODEL', 'XGB_MODEL', 'RF_MODEL']
+MODEL_LIST = ['BASELINE_LAST_WEEK', 'REGRESSION_MODEL', 'XGB_MODEL', 'RF_MODEL', 'OLD_XGB_MODEL']
 CATEGORIES = ['high_demand_locations', 'low_demand_locations', 'all_locations']
 METRICS = ['MAPE', 'MAE', 'RMSE']
 BASED_ON = ['Location', 'Date', 'Day_of_week']
